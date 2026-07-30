@@ -331,7 +331,7 @@ code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;pad
   <section class="panel" data-tab="board">
     <div class="card">
       <h2>③ 콘티 · 스토리보드</h2>
-      <p class="sub">컷별 <b>썸네일 설명 / ACTION / CAMERA</b>는 이미지 생성용, <span style="color:var(--accent2)">한글 대사·자막</span>과 <span style="color:var(--blue)">발음 교정 메모</span>는 따로 관리됩니다. 아래에서 편집 후 "콘티 시트 프롬프트 생성".</p>
+      <p class="sub">① 프로젝트·② 마스터 시트를 설정한 뒤 <b>"프로젝트 설정으로 콘티 자동 완성"</b>을 누르면 각 컷의 썸네일·역할·자막·나레이션·발음이 <b>자동으로 채워집니다</b>. 이후 편집하고 <b>"콘티 시트 프롬프트 생성"</b>을 누르면 이미지 생성용 프롬프트가 나옵니다. (<span style="color:var(--accent2)">한글 대사·자막</span> / <span style="color:var(--blue)">발음 메모</span>는 따로 관리)</p>
       <div class="field">
         <label class="f">시나리오 프리셋 <span class="hint">(주제·인물·컷을 한 번에 채우고 이후 편집 · ⚡=10초 저비용 릴스)</span></label>
         <div class="rowbtns">
@@ -341,7 +341,8 @@ code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;pad
         </div>
       </div>
       <div class="rowbtns" style="margin-bottom:4px">
-        <button class="btn sm" onclick="applyHookRoles()">훅 구조 역할 다시 채우기</button>
+        <button class="btn primary" onclick="autoFillFromProject()">✨ 프로젝트 설정으로 콘티 자동 완성</button>
+        <button class="btn sm" onclick="applyHookRoles()">훅 역할만 채우기</button>
         <button class="btn sm" onclick="addCut()">+ 컷 추가</button>
         <span class="pill" id="boardMeta"></span>
       </div>
@@ -359,6 +360,19 @@ code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;pad
           <select class="t" id="ai_format"><option value="9:16">9:16 · 10초 릴스 (4비트)</option><option value="16:9">16:9 · 12컷 유튜브</option></select>
         </div>
         <div class="field"><label class="f">추가 컨텍스트 / 핵심 수치 <span class="hint">(선택)</span></label><input class="t" id="ai_ctx" placeholder="예: 코스피 -35%, 서울 아파트 평균 12억, 출산율 0.7"></div>
+      </div>
+      <div class="field">
+        <label class="f">📎 학습 자료 첨부 <span class="hint">(PDF·TXT · 선택 · 배포 사이트에서 PDF 텍스트 추출)</span></label>
+        <input type="file" id="ai_file" accept=".pdf,.txt,application/pdf,text/plain" onchange="onAiFile(event)">
+        <div class="miniguide" id="ai_fileStatus"></div>
+      </div>
+      <div class="field">
+        <label class="f">📰 오늘의 이슈 Top 10 <span class="hint">(클릭 시 주제로 입력 · 라이브는 배포 사이트에서 동작)</span></label>
+        <div class="rowbtns">
+          <button class="btn sm" onclick="fetchLiveIssues()">라이브 뉴스 불러오기</button>
+          <button class="btn sm" onclick="genIssuesPrompt()">오늘의 이슈 Top10 프롬프트 복사</button>
+        </div>
+        <div id="issuesBox" class="chips" style="margin-top:8px"></div>
       </div>
       <div class="rowbtns">
         <button class="btn primary" onclick="genAIPrompt()">① AI 학습·생성 프롬프트 복사</button>
@@ -760,9 +774,10 @@ function buildShock10(){
   return out;
 }
 /* 10초 4비트 에피소드를 12컷 16:9 유튜브 콘티로 확장 (모든 주제가 토지로 귀결) */
-function shock12cuts(e){
+function shock12cuts(e,asp){
+  asp=asp||'16:9';
   const B=e.b,of=e.outfit;
-  return [
+  const cuts=[
    {thumb:B[0][0]+' , wide cinematic 16:9',action:'훅 (0~3s)',camera:'slow push-in',dialogue:B[0][1],narration:B[0][2],pron:B[0][5]||'',grade:'cool desaturated',kb:'slow zoom-in',sfx:B[0][4],dur:'',character:true},
    {thumb:'tight insert emphasizing the shocking detail of: '+B[0][0]+' , 16:9',action:'훅 강화',camera:'macro insert',dialogue:'「남의 얘기가 아닙니다」',narration:'남의 이야기가 아닙니다.',pron:'',grade:'cool',kb:'push-in',sfx:'강조 스팅어',dur:'',character:false},
    {thumb:B[1][0]+' , 16:9',action:'심화',camera:'medium insert',dialogue:B[1][1],narration:B[1][2],pron:B[1][5]||'',grade:'cold grey',kb:'push-in',sfx:B[1][4],dur:'',character:false},
@@ -776,6 +791,8 @@ function shock12cuts(e){
    {thumb:'the presenter ('+of+') smiling with quiet confidence, warm city bokeh, 16:9',action:'확신 (주제 연결)',camera:'medium close-up, shallow DoF',dialogue:'「'+e.t+', 답은 결국 땅입니다」',narration:e.land||'결국, 답은 땅입니다.',pron:'',grade:'warm bokeh',kb:'slow push',sfx:'상승음',dur:'',character:true},
    {thumb:'key visual — the presenter ('+of+') standing between golden farmland and a city skyline, slogan overlay, 16:9',action:'CTA · 키비주얼',camera:'fixed hero wide, crane up',dialogue:B[3][1],narration:B[3][2],pron:'',grade:'golden hero',kb:'static hero',sfx:'엔딩 스웰',dur:'',character:true}
   ];
+  if(asp!=='16:9')cuts.forEach(c=>{c.thumb=(c.thumb||'').replace(/16:9/g,asp);});
+  return cuts;
 }
 function buildShock12(){
   const out={};
@@ -814,6 +831,8 @@ function genAIPrompt(){
   if(url)P.push('참고 URL(반드시 열어 핵심을 학습): '+url);
   if(topic)P.push('주제/키워드: '+topic);
   if(ctx)P.push('추가 컨텍스트/핵심 수치: '+ctx);
+  if(aiFileText)P.push('[첨부 문서 발췌 — 이 내용을 학습해 콘티에 반영]\n'+aiFileText);
+  else if(aiFileName)P.push('첨부 파일: '+aiFileName+' — 이 파일을 이 대화에 함께 업로드해 학습시킨 뒤 콘티를 만드세요.');
   P.push('');
   P.push('[규칙]');
   P.push('- 결론은 반드시 "결국 답은 땅(토지)". 어떤 주제든 토지 매입으로 자연스럽게 연결.');
@@ -884,6 +903,98 @@ function quickDraft(){
   const id='cust_'+Math.random().toString(36).slice(2,8);
   saveCustomPreset(id,sc);buildScenarioOptions();$('scenarioSel').value=id;loadScenario();
   toast('빠른 초안 생성 · ⭐ 내 프리셋 저장됨 (편집하세요)');
+}
+
+/* ---------- ① 설정+마스터시트 → ③ 콘티 자동 완성 ---------- */
+const TOPIC_TO_EP={realestate:'ep2',stock:'ep3',finance:'ep5',economy:'ep7',biz:'ep13',silver:'ep11',kids:'ep12',story:'ep1'};
+function autoFillFromProject(){
+  const p=state.proj;
+  const epk=TOPIC_TO_EP[p.topic]||'ep1';
+  const src=SHOCK10.find(x=>x.k===epk)||SHOCK10[0];
+  if(state.cutsData.some(c=>c.thumb||c.dialogue||c.narration)){ if(!confirm('현재 컷을 프로젝트 설정 기반 초안으로 덮어씁니다. 진행할까요?'))return; }
+  const outfit=(state.sheet.type==='person'&&state.sheet.outfit)?state.sheet.outfit:src.outfit;
+  const e={k:'auto',t:((TOPICS.find(t=>t.id===p.topic)||{}).label||src.t),topic:p.topic,outfit,world:p.world||src.world,land:src.land,b:src.b};
+  const want12=(+p.cuts>=8)||p.hook!=='shock_10s';
+  if(want12) state.cutsData=shock12cuts(e,p.aspect);
+  else state.cutsData=e.b.map((bt,i)=>({thumb:bt[0],action:['충격 훅 (0~2s)','문제 심화 (2~5s)','해법 = 토지 (5~8s)','결론 + 댓글「토지」DM (8~10s)'][i],camera:i===0?'tight close-up, presenter':i===3?'medium hero, presenter':'insert / match-cut',dialogue:bt[1],narration:bt[2],pron:bt[5]||'',grade:i>=2?'warm golden':'cool desaturated',kb:bt[3],sfx:bt[4],dur:(['2','3','3','2'][i]||''),character:i===0||i===3}));
+  state.proj.cuts=state.cutsData.length;
+  if(!state.proj.slogan)state.proj.slogan='결국, 답은 땅';
+  const lm=LEADMAG[epk];
+  if(lm){ if(!state.lead.title)state.lead.title=lm.t; if(!state.lead.slides)state.lead.slides=lm.s; }
+  if(!state.lead.keyword)state.lead.keyword='토지';
+  hydrate();
+  if(state.lead.slides)renderCards();
+  persist();
+  toast('프로젝트 설정으로 콘티 자동 완성 · 편집 후 프롬프트 생성');
+}
+
+/* ---------- 오늘의 이슈 Top10 (라이브 + 프롬프트 폴백) ---------- */
+function copyText(str){const ta=document.createElement('textarea');ta.value=str;document.body.appendChild(ta);ta.focus();ta.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){}if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(str).catch(()=>{});ta.remove();return ok;}
+function genIssuesPrompt(){
+  const d=new Date();const ds=d.getFullYear()+'.'+(d.getMonth()+1)+'.'+d.getDate();
+  const P=[
+   '오늘('+ds+') 한국에서 가장 화제가 된 부동산·경제·사회·정책 이슈를 최신 뉴스에서 찾아 1위부터 10위까지 정리해줘.',
+   '각 항목 형식: [순위] 이슈 제목 — 한 줄 요약 — 토지(땅) 투자와 연결할 앵글 — 추천 훅 문구(한국어).',
+   '가능하면 네이버 뉴스/구글 뉴스 등 실제 오늘자 기사 기준. 과장·수익보장 표현은 피하고 방송 안전하게.',
+   '끝에, 그중 가장 조회수가 잘 나올 1개를 골라 이유와 함께 추천해줘.'
+  ].join('\n');
+  copyText(P);toast('오늘의 이슈 프롬프트 복사됨 · GenSpark/Gemini(실시간 검색)에 붙여넣기');
+}
+function cleanTitle(t){return String(t||'').replace(/\s+-\s+[^-]+$/,'').replace(/\s+/g,' ').trim();}
+function renderIssues(titles){
+  const box=$('issuesBox');box.innerHTML='';
+  if(!titles.length){box.innerHTML='<span class="mut">결과 없음</span>';return;}
+  titles.forEach((t,i)=>{
+    const c=document.createElement('button');c.className='chip';c.type='button';c.textContent=(i+1)+'. '+t;
+    c.onclick=()=>{$('ai_topic').value=t;toast('주제 입력됨 · ① 프롬프트 복사 또는 빠른 초안');try{$('ai_topic').scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}};
+    box.appendChild(c);
+  });
+}
+async function fetchLiveIssues(){
+  const box=$('issuesBox');box.innerHTML='<span class="mut">불러오는 중…</span>';
+  if(typeof fetch==='undefined'){box.innerHTML='<span style="color:var(--red)">이 환경은 라이브 불가 — 아래 프롬프트 버튼을 쓰세요.</span>';return;}
+  const rss='https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko';
+  const wraps=[u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://corsproxy.io/?url='+encodeURIComponent(u)];
+  for(const w of wraps){
+    try{
+      const res=await fetch(w(rss),{cache:'no-store'});
+      if(!res.ok)continue;
+      const xml=await res.text();
+      const doc=new DOMParser().parseFromString(xml,'text/xml');
+      const items=Array.prototype.slice.call(doc.querySelectorAll('item')).slice(0,10);
+      const titles=items.map(it=>cleanTitle(it.querySelector('title')&&it.querySelector('title').textContent)).filter(Boolean);
+      if(titles.length){renderIssues(titles);toast('오늘의 뉴스 헤드라인 '+titles.length+'건');return;}
+    }catch(e){}
+  }
+  box.innerHTML='<span style="color:var(--red)">라이브 불러오기 실패(미리보기/네트워크 제한). "오늘의 이슈 Top10 프롬프트"를 사용하세요.</span>';
+}
+
+/* ---------- PDF/TXT 학습 자료 첨부 ---------- */
+let aiFileText='',aiFileName='';
+async function onAiFile(ev){
+  const f=ev.target.files&&ev.target.files[0];const st=$('ai_fileStatus');
+  aiFileText='';aiFileName='';if(!f){st.textContent='';return;}
+  aiFileName=f.name;
+  try{
+    if(/\.txt$/i.test(f.name)||f.type==='text/plain'){aiFileText=(await f.text()).slice(0,8000);st.textContent='텍스트 '+aiFileText.length+'자 첨부됨 (프롬프트에 포함)';return;}
+    if(/\.pdf$/i.test(f.name)||f.type==='application/pdf'){
+      st.textContent='PDF 텍스트 추출 중…';
+      try{aiFileText=(await extractPdfText(f)).slice(0,8000);st.textContent='PDF 텍스트 '+aiFileText.length+'자 추출됨 (프롬프트에 포함)';}
+      catch(e){st.textContent='PDF 자동추출 불가 — 프롬프트 생성 후 이 PDF를 AI에 함께 첨부하세요 ('+f.name+')';}
+      return;
+    }
+    st.textContent='첨부: '+f.name+' — 프롬프트 생성 후 AI에 함께 첨부하세요';
+  }catch(e){st.textContent='파일 읽기 실패 — AI에 직접 첨부하세요 ('+f.name+')';}
+}
+async function extractPdfText(file){
+  const _imp=new Function('u','return import(u)'); // 정적 파서 회피 + 지연 로드
+  const pdfjs=await _imp('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.mjs';
+  const buf=await file.arrayBuffer();
+  const doc=await pdfjs.getDocument({data:buf}).promise;
+  let out='';const n=Math.min(doc.numPages,20);
+  for(let i=1;i<=n;i++){const pg=await doc.getPage(i);const tc=await pg.getTextContent();out+=tc.items.map(x=>x.str).join(' ')+'\n';}
+  return out;
 }
 
 /* ---------- state ---------- */
@@ -1447,4 +1558,5 @@ window.genSeedance=genSeedance;window.genNarration=genNarration;window.addCut=ad
 window.applyHookRoles=applyHookRoles;window.renderCards=renderCards;window.copyLeadCaption=copyLeadCaption;window.copyEl=copyEl;
 window.loadScenario=loadScenario;window.genCapcut=genCapcut;
 window.genAIPrompt=genAIPrompt;window.quickDraft=quickDraft;window.importGenerated=importGenerated;window.delSelectedPreset=delSelectedPreset;
+window.autoFillFromProject=autoFillFromProject;window.genIssuesPrompt=genIssuesPrompt;window.fetchLiveIssues=fetchLiveIssues;window.onAiFile=onAiFile;
 </script>
