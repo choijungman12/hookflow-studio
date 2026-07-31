@@ -159,14 +159,16 @@ a{color:var(--accent2)}
       <input id="s_worker" class="i" placeholder="https://hookflow-worker.<계정>.workers.dev">
     </div>
     <div class="field" style="display:flex;gap:10px">
-      <div style="flex:1"><label class="f">텍스트 모델</label><input id="s_tmodel" class="i" placeholder="gemini-2.5-flash"></div>
+      <div style="flex:1"><label class="f">텍스트 모델</label><input id="s_tmodel" class="i" placeholder="gemini-flash-latest"></div>
       <div style="flex:1"><label class="f">이미지 모델</label><input id="s_imodel" class="i" placeholder="gemini-2.5-flash-image"></div>
     </div>
-    <div style="display:flex;gap:8px;margin:8px 0 14px">
+    <div style="display:flex;gap:8px;margin:8px 0 8px;flex-wrap:wrap">
       <button class="btn p" onclick="testWorker()">연결 테스트</button>
+      <button class="btn" onclick="listModels()">📋 내 모델 목록</button>
       <button class="btn" onclick="saveSettings()">저장</button>
       <span id="s_result" style="align-self:center;font-size:12px"></span>
     </div>
+    <div id="s_models" style="font-size:11px;max-height:130px;overflow:auto;margin-bottom:12px"></div>
     <div class="callout"><b>방법 A</b>는 키가 대표님 브라우저에만 저장돼 대표님만 씁니다(깃허브·타인 노출 없음). 이 기기 브라우저 개발자도구로는 보이니, 공유 PC에선 방법 B(Worker Secret)를 쓰세요. 둘 다 없어도 템플릿 콘티·프롬프트·PDF는 사용 가능합니다.</div>
     <div style="text-align:right;margin-top:14px"><button class="btn gh" onclick="closeSettings()">닫기</button></div>
   </div>
@@ -196,8 +198,8 @@ const NT={
 
 let state=load();
 function blank(){return{name:'새 프로젝트',nodes:{},edges:[],view:{x:120,y:80,scale:1},seq:1,
-  settings:{apiKey:'',worker:'',tmodel:'gemini-2.5-flash',imodel:'gemini-2.5-flash-image'}};}
-function load(){try{const s=JSON.parse(localStorage.getItem(LS));return s&&s.nodes?s:blank();}catch(e){return blank();}}
+  settings:{apiKey:'',worker:'',tmodel:'gemini-flash-latest',imodel:'gemini-2.5-flash-image'}};}
+function load(){try{const s=JSON.parse(localStorage.getItem(LS));if(s&&s.nodes){if(s.settings&&(s.settings.tmodel==='gemini-2.5-flash'||!s.settings.tmodel))s.settings.tmodel='gemini-flash-latest';return s;}return blank();}catch(e){return blank();}}
 // 이미지 base64는 용량이 커서 저장에서 제외(런타임 메모리에만)
 function save(){
   const c=JSON.parse(JSON.stringify(state,(k,v)=>k==='_img'||k==='_imgs'?undefined:v));
@@ -471,7 +473,7 @@ async function api(path,body){
   throw new Error('NO_WORKER');
 }
 async function geminiTextDirect(body,key){
-  const m=body.model||state.settings.tmodel||'gemini-2.5-flash';
+  const m=body.model||state.settings.tmodel||'gemini-flash-latest';
   const gc={};if(body.schema){gc.responseMimeType='application/json';gc.responseSchema=body.schema;}
   const r=await fetch(GBASE+m+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({contents:[{role:'user',parts:[{text:body.prompt}]}],generationConfig:gc})});
@@ -754,13 +756,37 @@ function renderPrintCards(title,slides,ratio){
 /* ---------- settings ---------- */
 function openSettings(){$('#s_apikey').value=state.settings.apiKey||'';$('#s_worker').value=state.settings.worker||'';$('#s_tmodel').value=state.settings.tmodel;$('#s_imodel').value=state.settings.imodel;$('#s_result').textContent='';$('#setMask').classList.add('on');}
 function closeSettings(){$('#setMask').classList.remove('on');}
-function saveSettings(){state.settings.apiKey=$('#s_apikey').value.trim();state.settings.worker=$('#s_worker').value.trim();state.settings.tmodel=$('#s_tmodel').value.trim()||'gemini-2.5-flash';state.settings.imodel=$('#s_imodel').value.trim()||'gemini-2.5-flash-image';save();updateWorkerStatus();toast('설정 저장됨');closeSettings();}
+function saveSettings(){state.settings.apiKey=$('#s_apikey').value.trim();state.settings.worker=$('#s_worker').value.trim();state.settings.tmodel=$('#s_tmodel').value.trim()||'gemini-flash-latest';state.settings.imodel=$('#s_imodel').value.trim()||'gemini-2.5-flash-image';save();updateWorkerStatus();toast('설정 저장됨');closeSettings();}
+async function listModels(){
+  const key=($('#s_apikey').value||state.settings.apiKey||'').trim();const box=$('#s_models');
+  if(!key){box.innerHTML='<span style="color:var(--red)">방법 A에 Gemini 키를 먼저 입력하세요</span>';return;}
+  box.innerHTML='<span class="spin"></span> 불러오는 중…';
+  try{
+    const r=await fetch(GBASE.slice(0,-1)+'?key='+encodeURIComponent(key)+'&pageSize=200');
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){box.innerHTML='<span style="color:var(--red)">'+((d.error&&d.error.message)||('HTTP '+r.status))+'</span>';return;}
+    const ms=(d.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent'));
+    const name=m=>m.name.replace('models/','');
+    const img=ms.filter(m=>/image/i.test(m.name));
+    const txt=ms.filter(m=>!/image|embedding|aqa|tts|vision-only/i.test(m.name));
+    // 자동 추천: 최신 flash 텍스트 / 이미지
+    const pref=arr=>arr.map(name).sort((a,b)=>(b.match(/[\d.]+/)?parseFloat(b.match(/[\d.]+/)[0]):0)-(a.match(/[\d.]+/)?parseFloat(a.match(/[\d.]+/)[0]):0));
+    const bestT=pref(txt.filter(m=>/flash/i.test(m.name)))[0]||pref(txt)[0];
+    const bestI=pref(img)[0];
+    if(bestT){$('#s_tmodel').value=bestT;}if(bestI){$('#s_imodel').value=bestI;}
+    const chip=(nm,which)=>`<button class="btn sm" style="margin:2px" onclick="pickModel('${nm}','${which}')">${nm}</button>`;
+    box.innerHTML='<div style="color:var(--green);margin-bottom:4px">✅ 자동 설정: 텍스트=<b>'+(bestT||'-')+'</b> · 이미지=<b>'+(bestI||'-')+'</b> (아래에서 바꿀 수 있어요)</div>'+
+      '<div class="f">텍스트 모델</div>'+txt.map(m=>chip(name(m),'t')).join('')+
+      '<div class="f" style="margin-top:6px">이미지 모델</div>'+(img.length?img.map(m=>chip(name(m),'i')).join(''):'<span class="mut">이미지 생성 모델 없음(키 권한 확인)</span>');
+  }catch(e){box.innerHTML='<span style="color:var(--red)">불러오기 실패: '+e.message+'</span>';}
+}
+function pickModel(nm,which){if(which==='t')$('#s_tmodel').value=nm;else $('#s_imodel').value=nm;toast(nm+' 선택 · 저장을 눌러 적용');}
 async function testWorker(){
   const key=($('#s_apikey').value||'').trim();const url=($('#s_worker').value||'').trim().replace(/\/+$/,'');const r=$('#s_result');
   r.innerHTML='<span class="spin"></span>확인 중…';
   try{
     if(key){
-      const m=($('#s_tmodel').value||'gemini-2.5-flash').trim();
+      const m=($('#s_tmodel').value||'gemini-flash-latest').trim();
       const res=await fetch(GBASE+m+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:'ping'}]}]})});
       const d=await res.json().catch(()=>({}));
       if(res.ok){r.style.color='var(--green)';r.textContent='Gemini 키 연결 OK ✅ (이제 앱에서 바로 생성)';}
@@ -919,5 +945,5 @@ function boot(){
 }
 boot();
 // expose
-Object.assign(window,{addNode,seedStarter,fitView,openSettings,closeSettings,saveSettings,testWorker,exportJSON,importJSON});
+Object.assign(window,{addNode,seedStarter,fitView,openSettings,closeSettings,saveSettings,testWorker,listModels,pickModel,exportJSON,importJSON});
 </script>
