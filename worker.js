@@ -102,9 +102,9 @@ async function news(req, env){
 async function seedance(req, env){
   if (!env.FAL_KEY) return json(env, {error:'FAL_KEY 미설정 · 영상 생성은 선택 기능입니다'}, 400);
   const body = await req.json();
-  // status 폴링: {statusUrl} 이 오면 결과 조회
-  if (body && body.statusUrl) {
-    const r = await fetch(body.statusUrl, { headers: { 'Authorization': 'Key ' + env.FAL_KEY } });
+  // 인증 GET (status_url / response_url 폴링·결과조회)
+  if (body && (body.url || body.statusUrl)) {
+    const r = await fetch(body.url || body.statusUrl, { headers: { 'Authorization': 'Key ' + env.FAL_KEY } });
     return json(env, await r.json(), r.status);
   }
   const model = body.model || 'fal-ai/bytedance/seedance/v1/lite/text-to-video';

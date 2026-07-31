@@ -127,8 +127,11 @@ a{color:var(--accent2)}
   <button class="padd" onclick="addNode('conti')"><span class="ic">🎬</span>콘티</button>
   <button class="padd" onclick="addNode('cutimg')"><span class="ic">🖼️</span>컷 이미지</button>
   <button class="padd" onclick="addNode('export')"><span class="ic">📤</span>영상·나레이션</button>
+  <button class="padd" onclick="addNode('video')"><span class="ic">🎞️</span>Seedance 영상</button>
   <button class="padd" onclick="addNode('lead')"><span class="ic">📄</span>리드마그넷 PDF</button>
-  <div class="phelp">포트(●)를 드래그해 노드를 연결하세요. 권장 흐름:<br>🎯→🧑‍🎤→🎬→🖼️→📤/📄</div>
+  <button class="padd" onclick="addNode('trends')"><span class="ic">📰</span>오늘의 이슈</button>
+  <button class="padd" onclick="addNode('card')"><span class="ic">🃏</span>후킹 카드+DM</button>
+  <div class="phelp">포트(●)를 드래그해 노드를 연결하세요. 권장 흐름:<br>🎯/📰/🃏→🧑‍🎤→🎬→🖼️→📤/🎞️/📄</div>
   <button class="btn sm" style="margin-top:6px" onclick="seedStarter()">＋ 기본 흐름 자동배치</button>
 </div>
 
@@ -175,7 +178,10 @@ const NT={
   conti:{ic:'🎬',title:'콘티',in:true,out:true},
   cutimg:{ic:'🖼️',title:'컷 이미지',in:true,out:true},
   export:{ic:'📤',title:'영상·나레이션',in:true,out:false},
-  lead:{ic:'📄',title:'리드마그넷 PDF',in:true,out:false}
+  lead:{ic:'📄',title:'리드마그넷 PDF',in:true,out:false},
+  trends:{ic:'📰',title:'오늘의 이슈',in:false,out:true},
+  video:{ic:'🎞️',title:'Seedance 영상',in:true,out:false},
+  card:{ic:'🃏',title:'후킹 카드+DM',in:false,out:true}
 };
 
 let state=load();
@@ -233,6 +239,9 @@ function defaultData(type){
   if(type==='cutimg')return{};
   if(type==='export')return{tab:'sheet'};
   if(type==='lead')return{};
+  if(type==='trends')return{titles:[],picked:''};
+  if(type==='video')return{res:'720p',dur:'5'};
+  if(type==='card')return{topic:(RE_TOPICS[0]&&RE_TOPICS[0].id)||'nongji_pension',audience:'general'};
   return{};
 }
 function delNode(id){delete state.nodes[id];state.edges=state.edges.filter(e=>e.from!==id&&e.to!==id);
@@ -287,16 +296,19 @@ function renderBody(id){
         <button data-v="product" class="${d.kind==='product'?'on':''}">제품</button></div></div>
       <div><label class="f">설명</label><textarea class="i" data-k="desc" placeholder="인물/제품 묘사">${esc(d.desc)}</textarea></div>
       <div><label class="f">의상 / 디자인</label><input class="i" data-k="outfit" value="${esc(d.outfit)}"></div>
-      <button class="btn p" data-run="master">🖼️ AI 마스터 이미지 생성</button>
-      <div id="prev-${id}">${d._img?imgTag(d._img):'<div class="badge">이미지 미생성</div>'}</div>`;
+      <div class="tabs"><button class="btn sm p" data-run="master-prompt">📋 이미지 프롬프트</button><button class="btn sm" data-run="master">Worker로 생성</button></div>
+      <div class="out"><textarea id="mp-${id}" readonly placeholder="프롬프트 생성 → 복사 → GenSpark/Nano Banana 등에 붙여 이미지 제작">${esc(d._prompt||'')}</textarea></div>
+      <button class="btn sm" data-run="copy:mp-${id}">복사</button>
+      <div id="prev-${id}">${d._img?imgTag(d._img):''}</div>`;
   } else if(n.type==='conti'){
     b.innerHTML=`
       <div class="tabs"><button class="btn sm p" data-run="conti-ai">🎬 AI 콘티 생성</button><button class="btn sm" data-run="conti-tpl">템플릿</button></div>
       <div id="prev-${id}">${contiPreview(d.cuts)}</div>`;
   } else if(n.type==='cutimg'){
     b.innerHTML=`
-      <button class="btn p" data-run="cutimg">🖼️ 컷 이미지 일괄 생성</button>
-      <div class="badge">마스터 이미지를 참조로 캐릭터 일관성 유지</div>
+      <div class="tabs"><button class="btn sm p" data-run="cutimg-prompt">📋 컷 이미지 프롬프트</button><button class="btn sm" data-run="cutimg">Worker로 일괄생성</button></div>
+      <div class="out"><textarea id="cp-${id}" readonly placeholder="콘티 연결 후 생성 → 복사 → 이미지 사이트에 붙여넣기 → 만든 이미지를 힉스필드/Seedance에 넣어 영상화">${esc(d._prompts||'')}</textarea></div>
+      <button class="btn sm" data-run="copy:cp-${id}">복사</button>
       <div id="prev-${id}">${cutGrid(d._imgs)}</div>`;
   } else if(n.type==='export'){
     b.innerHTML=`
@@ -313,6 +325,32 @@ function renderBody(id){
       <button class="btn sm p" data-run="lead">PDF 카드 생성</button>
       <button class="btn sm" onclick="window.print()">PDF로 저장(인쇄)</button>
       <div id="prev-${id}" class="mut" style="font-size:11px">콘티 연결 후 생성</div>`;
+  } else if(n.type==='trends'){
+    b.innerHTML=`
+      <div class="tabs"><button class="btn sm p" data-run="trends">📰 라이브 뉴스</button><button class="btn sm" data-run="trends-prompt">Top10 프롬프트</button></div>
+      <div class="badge">${d.picked?('선택: '+esc(d.picked)):'헤드라인 클릭 → 주제 선택'}</div>
+      <div id="prev-${id}">${trendsList(d.titles,id)}</div>`;
+  } else if(n.type==='video'){
+    b.innerHTML=`
+      <div class="badge">fal.ai Seedance · 720p 5초 ≈ $0.05</div>
+      <div style="display:flex;gap:6px">
+        <div style="flex:1"><label class="f">해상도</label><select class="i" data-k="res"><option ${d.res==='720p'?'selected':''}>720p</option><option ${d.res==='1080p'?'selected':''}>1080p</option><option ${d.res==='480p'?'selected':''}>480p</option></select></div>
+        <div style="flex:1"><label class="f">길이(초)</label><select class="i" data-k="dur"><option ${d.dur==='5'?'selected':''}>5</option><option ${d.dur==='10'?'selected':''}>10</option></select></div></div>
+      <button class="btn sm p" data-run="video">🎞️ 컷 영상 생성(순차)</button>
+      <div class="badge">완료 시 노드에 미리보기 · Worker에 FAL_KEY 필요</div>
+      <div id="prev-${id}">${videoPrev(d._jobs)}</div>`;
+  } else if(n.type==='card'){
+    b.innerHTML=`
+      <div><label class="f">주제</label><select class="i" data-k="topic">${RE_TOPICS.map(t=>`<option ${d.topic===t.id?'selected':''} value="${t.id}">${esc(t.label)}</option>`).join('')}</select></div>
+      <div><label class="f">타깃</label><div class="seg" data-seg="audience">
+        <button data-v="general" class="${d.audience==='general'?'on':''}">일반</button>
+        <button data-v="newbie" class="${d.audience==='newbie'?'on':''}">사회초년생</button>
+        <button data-v="retire" class="${d.audience==='retire'?'on':''}">은퇴자</button></div></div>
+      <div class="tabs"><button class="btn sm p" data-run="card-ai">🃏 AI 후킹+해결</button><button class="btn sm" data-run="card-tpl">템플릿</button></div>
+      <button class="btn sm" data-run="card-copyimg">📋 카드 이미지 프롬프트 복사</button>
+      <button class="btn sm" data-run="card-img">Worker로 이미지 생성</button>
+      <button class="btn sm" onclick="window.print()">해결 PDF(인쇄)</button>
+      <div id="prev-${id}">${cardPrev(d._card)}</div>`;
   }
   // wire inputs
   b.querySelectorAll('[data-k]').forEach(inp=>inp.addEventListener('input',()=>{n.data[inp.dataset.k]=inp.value;scheduleSave();}));
@@ -322,8 +360,14 @@ function renderBody(id){
   }));
   b.querySelectorAll('[data-run]').forEach(btn=>btn.onclick=()=>{
     const act=btn.dataset.run;
-    if(act.indexOf('copy-')===0){const t=document.getElementById('out-'+id);t.select();try{document.execCommand('copy')}catch(e){}navigator.clipboard&&navigator.clipboard.writeText(t.value).catch(()=>{});toast('복사됨');return;}
+    if(act.indexOf('copy:')===0){const t=document.getElementById(act.slice(5));copyStr(t?(t.value||''):'');toast('복사됨');return;}
+    if(act.indexOf('copy-')===0){const t=document.getElementById('out-'+id);copyStr(t?(t.value||''):'');toast('복사됨');return;}
     runNode(id,act);
+  });
+  b.querySelectorAll('[data-pick]').forEach(btn=>btn.onclick=()=>{
+    const t=n.data.titles[+btn.dataset.pick];n.data.picked=t;
+    n.data._proj={topic:t,aspect:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:''};
+    renderBody(id);scheduleSave();toast('주제 선택: '+t);
   });
 }
 function esc(s){return(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -381,6 +425,8 @@ function computeOut(id,seen){
   if(n.type==='master')return{...base,master:{desc:n.data.desc,outfit:n.data.outfit,kind:n.data.kind,image:n.data._img||null}};
   if(n.type==='conti')return{...base,cuts:n.data.cuts||[],proj:n.data._proj||base.proj};
   if(n.type==='cutimg')return{...base,cutImages:n.data._imgs||[]};
+  if(n.type==='trends')return{proj:n.data._proj||(n.data.picked?{topic:n.data.picked,aspect:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:''}:base.proj)};
+  if(n.type==='card'){const t=RE_TOPICS.find(x=>x.id===n.data.topic);return{...base,proj:{topic:(t?t.label:n.data.topic),aspect:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:(n.data._card&&n.data._card.hookSub)||''},card:n.data._card};}
   return base;
 }
 function projOf(n){const d=n.data;return{topic:d.topic||'이 주제',format:d.format,aspect:d.format,hook:d.hook,slogan:d.slogan,ctx:d.ctx};}
@@ -402,27 +448,55 @@ async function runNode(id,act){
   const n=state.nodes[id];
   try{
     if(act==='master')return await runMaster(id);
+    if(act==='master-prompt')return runMasterPrompt(id);
+    if(act==='cutimg-prompt')return runCutImgPrompt(id);
+    if(act==='card-copyimg')return runCardCopyImg(id);
     if(act==='conti-ai')return await runContiAI(id);
     if(act==='conti-tpl')return runContiTpl(id);
     if(act==='cutimg')return await runCutImg(id);
     if(act==='export')return runExport(id);
     if(act==='lead')return runLead(id);
+    if(act==='trends')return await runTrends(id);
+    if(act==='trends-prompt')return runTrendsPrompt(id);
+    if(act==='video')return await runVideo(id);
+    if(act==='card-ai')return await runCardAI(id);
+    if(act==='card-tpl')return runCardTpl(id);
+    if(act==='card-img')return await runCardImg(id);
   }catch(e){
     if(String(e.message)==='NO_WORKER'){toast('먼저 ⚙설정에서 Worker를 연결하세요 (또는 템플릿 사용)');openSettings();}
     else toast('오류: '+e.message);
   }
 }
 
-async function runMaster(id){
-  const ctx=incoming(id);const n=state.nodes[id];const proj=ctx.proj||{};
-  const isP=n.data.kind==='person';
-  const prompt=(isP
+function masterImgPrompt(n,ctx){
+  const proj=(ctx&&ctx.proj)||{};const isP=n.data.kind==='person';
+  return (isP
     ? `Character reference sheet on a light cream background, labeled panels 정면/3-4/측면/전신/표정. Same identity in every panel. Character: ${n.data.desc}. Outfit: ${n.data.outfit}. Fully clothed, classy, broadcast-safe.`
     : `Product reference sheet on light background: HERO / 360 (front-side-back) / DETAIL macro. Product: ${n.data.desc}. Design: ${n.data.outfit}. No real brand logos.`)
     +` Photoreal cinematic. Korean labels only, NO Japanese text, no watermark. Format hint ${proj.aspect||'9:16'}.`;
+}
+function runMasterPrompt(id){const n=state.nodes[id];n.data._prompt=masterImgPrompt(n,incoming(id));renderBody(id);scheduleSave();copyStr(n.data._prompt);toast('마스터 이미지 프롬프트 생성·복사 · GenSpark/Nano Banana에 붙여넣기');}
+async function runMaster(id){
+  const n=state.nodes[id];const prompt=masterImgPrompt(n,incoming(id));
   toast('마스터 이미지 생성 중… (수초~십수초)');
   const d=await api('/gemini/image',{prompt,model:state.settings.imodel});
-  n.data._img=d.images[0];renderBody(id);scheduleSave();toast('마스터 이미지 생성 완료');
+  n.data._img=d.images[0];n.data._prompt=prompt;renderBody(id);scheduleSave();toast('마스터 이미지 생성 완료');
+}
+function cutImgPromptText(ctx){
+  const cuts=(ctx&&ctx.cuts)||[];const asp=(ctx.proj&&ctx.proj.aspect)||'9:16';
+  if(!cuts.length)return'';
+  return cuts.map((c,i)=>(i+1)+'. '+(c.thumb||c.action||'')+' , '+asp+' frame'+(c.grade?', '+c.grade+' grade':'')+', photoreal cinematic, consistent presenter (use the master sheet image as reference). No watermark, NO Japanese text.').join('\n\n');
+}
+function runCutImgPrompt(id){
+  const ctx=incoming(id);const txt=cutImgPromptText(ctx);
+  if(!txt){toast('콘티 노드를 연결하고 콘티를 먼저 생성하세요');return;}
+  state.nodes[id].data._prompts=txt;renderBody(id);scheduleSave();copyStr(txt);
+  toast('컷 이미지 프롬프트 생성·복사 · 이미지 제작 후 힉스필드/Seedance에 넣어 영상화');
+}
+function runCardCopyImg(id){
+  const n=state.nodes[id];const c=n.data._card;const t=cardTopic(n);
+  const pr=(c&&c.cardImagePrompt)||('Instagram hook card background, '+t.label+', curiosity-provoking, clean editorial, leave top area empty for a big Korean headline, no text baked in, no watermark, photoreal cinematic.');
+  copyStr(pr);toast('카드 이미지 프롬프트 복사 · 이미지 사이트에 붙여넣기');
 }
 
 const CONTI_SCHEMA={type:'object',properties:{cuts:{type:'array',items:{type:'object',properties:{
@@ -570,6 +644,122 @@ function exportJSON(){const blob=new Blob([JSON.stringify(state,(k,v)=>k==='_img
 function importJSON(ev){const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);if(!o.nodes)throw 0;state=Object.assign(blank(),o);save();location.reload();}catch(e){toast('불러오기 실패');}};r.readAsText(f);ev.target.value='';}
 $('#pname').addEventListener('input',e=>{state.name=e.target.value;scheduleSave();});
 window.addEventListener('keydown',e=>{if((e.key==='Delete'||e.key==='Backspace')&&selId&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'){delNode(selId);selId=null;}});
+
+/* ---------- 유틸 ---------- */
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function copyStr(s){const ta=document.createElement('textarea');ta.value=s;document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(e){}navigator.clipboard&&navigator.clipboard.writeText(s).catch(()=>{});ta.remove();}
+
+/* ---------- 오늘의 이슈 ---------- */
+function trendsList(titles,id){
+  if(!titles||!titles.length)return'<div class="mut" style="font-size:11px">라이브 뉴스를 불러오세요 (Worker 필요)</div>';
+  return titles.map((t,i)=>`<button class="btn sm" style="text-align:left;width:100%;margin-bottom:3px" data-pick="${i}">${i+1}. ${esc(t)}</button>`).join('');
+}
+async function runTrends(id){
+  const d=await api('/news',{});const node=state.nodes[id];node.data.titles=d.titles||[];renderBody(id);
+  // wire pick buttons
+  const b=document.getElementById('body-'+id);b&&b.querySelectorAll('[data-pick]').forEach(btn=>btn.onclick=()=>{
+    const t=node.data.titles[+btn.dataset.pick];node.data.picked=t;node.data._proj={topic:t,aspect:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:''};renderBody(id);wirePicks(id);scheduleSave();toast('주제 선택: '+t);});
+  scheduleSave();toast('뉴스 '+node.data.titles.length+'건');
+}
+function wirePicks(id){const node=state.nodes[id];const b=document.getElementById('body-'+id);b&&b.querySelectorAll('[data-pick]').forEach(btn=>btn.onclick=()=>{const t=node.data.titles[+btn.dataset.pick];node.data.picked=t;node.data._proj={topic:t,aspect:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:''};renderBody(id);wirePicks(id);scheduleSave();toast('주제 선택: '+t);});}
+function runTrendsPrompt(id){
+  const dt=new Date();const ds=dt.getFullYear()+'.'+(dt.getMonth()+1)+'.'+dt.getDate();
+  copyStr('오늘('+ds+') 한국 부동산·경제·정책 이슈 Top 10을 최신 뉴스에서 뽑아 [순위] 제목 — 요약 — 토지 연결 앵글 — 훅 문구 형식으로. 과장·수익보장 표현 금지.');
+  toast('오늘의 이슈 프롬프트 복사 · GenSpark/Gemini에 붙여넣기');
+}
+
+/* ---------- Seedance 영상(fal 폴링) ---------- */
+function videoPrev(jobs){jobs=jobs||{};const ks=Object.keys(jobs);if(!ks.length)return'<div class="badge">미생성</div>';
+  return ks.map(k=>{const j=jobs[k]||{};return `<div class="cutrow"><b>컷 ${(+k)+1}</b> ${j.status==='done'?'✅':'· '+esc(j.status||'')+(j.msg?(' '+esc(j.msg)):'')}</div>`+(j.url?`<div class="prev"><video src="${j.url}" controls muted playsinline style="width:100%"></video></div>`:'');}).join('');}
+async function runVideo(id){
+  const ctx=incoming(id);const cuts=ctx.cuts||[];const proj=ctx.proj||{};
+  if(!cuts.length){toast('콘티 노드를 연결하고 콘티를 먼저 생성하세요');return;}
+  if(!state.settings.worker){toast('설정에서 Worker 연결(+FAL_KEY) 필요');openSettings();return;}
+  const node=state.nodes[id];node.data._jobs={};const asp=proj.aspect||'9:16';const res=node.data.res||'720p';const dur=+(node.data.dur||5);
+  for(let i=0;i<cuts.length;i++){
+    const c=cuts[i];node.data._jobs[i]={status:'제출'};renderBody(id);
+    const prompt=`${c.thumb||c.action}. ${c.camera||''} ${c.kb||''}. ${c.grade||'cinematic'} grade, ${asp}, photoreal. no watermark, keep identity.`;
+    try{
+      const sub=await api('/seedance',{prompt,resolution:res,duration:dur});
+      const statusUrl=sub.status_url||sub.statusUrl;const respUrl=sub.response_url;
+      if(!statusUrl){node.data._jobs[i]={status:'error',msg:(sub.error||'no status_url')};renderBody(id);continue;}
+      let url=null;
+      for(let tr=0;tr<40;tr++){
+        await sleep(3000);node.data._jobs[i]={status:'생성중('+(tr+1)+')'};renderBody(id);
+        const st=await api('/seedance',{url:statusUrl});
+        if(st.status==='COMPLETED'){const out=await api('/seedance',{url:respUrl||st.response_url});
+          url=(out.video&&out.video.url)||(out.output&&out.output.video&&out.output.video.url)||(out.videos&&out.videos[0]&&out.videos[0].url)||null;break;}
+        if(st.status==='FAILED'||st.error){node.data._jobs[i]={status:'error',msg:(st.error||'FAILED')};break;}
+      }
+      if(url){node.data._jobs[i]={status:'done',url};}else if(node.data._jobs[i].status!=='error'){node.data._jobs[i]={status:'error',msg:'시간초과'};}
+      renderBody(id);
+    }catch(e){if(String(e.message)==='NO_WORKER'){toast('Worker 연결 필요');return;}node.data._jobs[i]={status:'error',msg:e.message};renderBody(id);}
+  }
+  toast('영상 생성 종료');
+}
+
+/* ---------- 후킹 카드 + DM 해결 (부동산 금융 주제) ---------- */
+const RE_TOPICS=[
+  {id:'nongji_pension',label:'농지연금(은퇴 월지급)',q:'내 농지, 매달 연금으로 바꾸는 법?',sol:['농지연금 가입 조건(연령·영농경력)','월지급액 결정 구조','담보 농지 요건 체크','신청 절차와 서류','주의점·전문가 상담']},
+  {id:'cheongyak',label:'아파트 청약',q:'청약 가점, 이렇게 관리하면 당첨 확률 오릅니다',sol:['가점제 vs 추첨제 구조','통장 관리 핵심','특별공급 자격 확인','전략적 지역·타입 선택','청약 일정 체크리스트']},
+  {id:'auction',label:'부동산 경매',q:'경매 초보, 첫 낙찰까지 5단계',sol:['권리분석 기본','현장·명도 리스크 확인','입찰가 산정','대출·자금 계획','명도·수익화']},
+  {id:'redevelop',label:'재개발·재건축',q:'재개발 입주권, 언제 사야 이득일까?',sol:['조합·단계별 리스크','감정평가·분담금 구조','입주권 vs 분양권','투자 타이밍','세금·규제 확인']},
+  {id:'loan',label:'대출 받는 법',q:'대출 규제 시대, 한도 최대로 받는 법',sol:['DSR·LTV 기본 이해','신용·소득 관리','상품 비교 포인트','한도 늘리는 실전 팁','금리 방어 전략']},
+  {id:'transfer_tax',label:'양도세 감면',q:'양도세, 합법적으로 아끼는 방법',sol:['1주택 비과세 요건','장기보유특별공제','8년 자경 감면(농지)','취득·보유·양도 타이밍','전문가 검토 필수']},
+  {id:'nongji_law',label:'농지법 대응',q:'농지 살 때 꼭 알아야 할 농지법',sol:['농지취득자격증명(농취증)','자경·위탁 규정','전용·처분 의무','계획관리지역 활용','위반 리스크 회피']},
+  {id:'smartfarm',label:'스마트팜',q:'초보도 되는 스마트팜, 수익 구조는?',sol:['입지·작물 선정','초기 투자·보조금','자동화 설비 개요','판로 확보','규제·인허가']},
+  {id:'nongji_use',label:'농지 활용',q:'놀리는 농지, 돈 되게 쓰는 5가지',sol:['영농·임대','체험농장','태양광(규제 확인)','창고·물류','개발행위허가 검토']},
+  {id:'forestry',label:'임업 활용',q:'산지(임야), 이렇게 수익화합니다',sol:['임업경영체 등록','수목·특용작물','산지전용 규정','임산물 판로','장기 가치·개발']},
+  {id:'dev_permit',label:'농지 개발행위허가',q:'맹지가 대지 되는 개발행위허가',sol:['허가 대상·요건','도로·배수 확인','토목설계·측량','부담금·세금','절차 로드맵']},
+  {id:'minbak',label:'농어촌민박업',q:'시골집으로 민박 수익 내는 법',sol:['농어촌민박 등록 요건','규모·안전 기준','예약·운영 플랫폼','세무·소득 신고','성수기 전략']},
+  {id:'airbnb',label:'에어비앤비',q:'합법 에어비앤비, 시작 전 체크리스트',sol:['숙박업 유형·합법성','등록·신고 요건','입지·수요 분석','가격·운영 자동화','세금·리스크']},
+  {id:'hostel',label:'호스텔',q:'소자본 호스텔 창업, 가능할까?',sol:['업종·허가 요건','입지·타깃','객실 구성·투자','운영·인건비','수익성 시뮬레이션']},
+  {id:'camping',label:'야영장(캠핑장)',q:'땅으로 캠핑장, 수익과 규제',sol:['야영장 등록 요건','입지·시설 기준','전기·상하수 인프라','예약 운영','안전·보험']},
+  {id:'cafe',label:'무인카페',q:'무인카페, 진짜 남을까? 수익 구조 해부',sol:['입지·상권 분석','초기 투자·장비','운영비·마진','무인 운영 리스크','손익분기 계산']},
+  {id:'policy_tax',label:'부동산 세법·정책',q:'바뀐 부동산 세법, 뭐가 달라졌나',sol:['취득·보유·양도세 흐름','최신 규제 요약','절세 원칙','상황별 전략','전문가 상담 시점']}
+];
+const CARD_SCHEMA={type:'object',properties:{hookQuestion:{type:'string'},hookSub:{type:'string'},cardImagePrompt:{type:'string'},dmSolution:{type:'array',items:{type:'string'}},caption:{type:'string'}},required:['hookQuestion','dmSolution','cardImagePrompt']};
+const AUD={general:'일반',newbie:'사회초년생',retire:'은퇴자'};
+function cardPrev(c){
+  if(!c)return'<div class="badge">미생성</div>';
+  return (c.image?imgTag(c.image):'')+
+    '<div class="cutrow"><b>❓ '+esc(c.hookQuestion||'')+'</b></div>'+(c.hookSub?('<div class="cutrow mut">'+esc(c.hookSub)+'</div>'):'')+
+    '<div class="badge ok" style="margin:4px 0">DM 해결안</div>'+
+    (c.dmSolution||[]).map((s,i)=>'<div class="cutrow">'+(i+1)+'. '+esc(s)+'</div>').join('')+
+    (c.caption?('<div class="badge" style="margin-top:4px">캡션</div><div class="cutrow mut">'+esc(c.caption)+'</div>'):'');
+}
+function cardTopic(n){return RE_TOPICS.find(t=>t.id===n.data.topic)||RE_TOPICS[0];}
+function runCardTpl(id){
+  const n=state.nodes[id];const t=cardTopic(n);const aud=AUD[n.data.audience]||'일반';
+  const card={hookQuestion:t.q,hookSub:aud+' 필독 · 저장하세요',
+    cardImagePrompt:`Instagram hook card background, ${t.label} theme, Korean real-estate finance, curiosity-provoking, clean editorial, space for a big Korean headline (leave upper area empty for text overlay). No text baked in, no watermark, photoreal cinematic.`,
+    dmSolution:t.sol,
+    caption:t.q+'\n\n📩 더 궁금하면? 팔로우 + 댓글 「토지」 → 해결 가이드 DM\n#'+t.label.replace(/[()·]/g,'')+' #부동산 #재테크 #토지'};
+  n.data._card=card;renderBody(id);renderPrintCards(t.q,t.sol,'9/16');scheduleSave();toast('템플릿 후킹 카드 생성');
+}
+async function runCardAI(id){
+  const n=state.nodes[id];const t=cardTopic(n);const aud=AUD[n.data.audience]||'일반';
+  const prompt=[
+    '한국 부동산·금융 콘텐츠 마케터로서, 아래 주제로 인스타 "후킹 카드 → 팔로우·댓글 시 DM 해결안" 세트를 만들어줘.',
+    '주제: '+t.label+' / 타깃: '+aud,
+    '- hookQuestion: 궁금증을 강하게 유발하는 한국어 한 줄 질문',
+    '- hookSub: 보조 후킹 문구(한국어)',
+    '- cardImagePrompt: 카드 배경 이미지 영어 프롬프트(한글 텍스트는 굽지 말고 상단 여백 비우기, no watermark)',
+    '- dmSolution: DM으로 보낼 해결안 4~6단계(한국어, 실행 체크리스트, 수익보장·과장 금지, 필요시 전문가 상담 안내)',
+    '- caption: 인스타 캡션(한국어, 댓글 「토지」 유도 + 해시태그)',
+    'JSON만 출력.'
+  ].join('\n');
+  toast('AI 후킹+해결 생성 중…');
+  const d=await api('/gemini/text',{prompt,schema:CARD_SCHEMA,model:state.settings.tmodel});
+  let o;try{o=JSON.parse(d.text);}catch(e){throw new Error('카드 JSON 파싱 실패');}
+  n.data._card=Object.assign({},n.data._card,o);renderBody(id);renderPrintCards(o.hookQuestion||t.q,o.dmSolution||t.sol,'9/16');scheduleSave();toast('AI 후킹 카드 생성 완료');
+}
+async function runCardImg(id){
+  const n=state.nodes[id];const t=cardTopic(n);const pr=(n.data._card&&n.data._card.cardImagePrompt)||('Instagram hook card background, '+t.label+', curiosity, clean editorial, leave top empty for headline, no text, no watermark, photoreal.');
+  toast('후킹 카드 이미지 생성 중…');
+  const d=await api('/gemini/image',{prompt:pr,model:state.settings.imodel});
+  n.data._card=Object.assign({hookQuestion:t.q,dmSolution:t.sol},n.data._card,{image:d.images[0]});renderBody(id);scheduleSave();toast('후킹 카드 이미지 완료');
+}
 
 /* ---------- starter ---------- */
 function seedStarter(){
