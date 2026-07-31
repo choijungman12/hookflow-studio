@@ -967,23 +967,50 @@ function renderIssues(titles){
     box.appendChild(c);
   });
 }
+function parseRssTitles(xml){
+  if(!xml)return [];
+  let titles=[];
+  try{
+    let doc=new DOMParser().parseFromString(xml,'text/xml');
+    let items=Array.prototype.slice.call(doc.querySelectorAll('item'));
+    if(!items.length){doc=new DOMParser().parseFromString(xml,'text/html');items=Array.prototype.slice.call(doc.querySelectorAll('item'));}
+    titles=items.map(it=>{const t=it.querySelector('title');return cleanTitle(t&&t.textContent);}).filter(Boolean);
+  }catch(e){}
+  if(!titles.length){ // 정규식 폴백
+    const m=xml.match(/<title>([\s\S]*?)<\/title>/g)||[];
+    titles=m.map(s=>cleanTitle(s.replace(/<\/?title>/g,'').replace(/<!\[CDATA\[|\]\]>/g,''))).filter(Boolean);
+    if(titles.length&&/google news/i.test(titles[0]))titles.shift(); // 피드 제목 제거
+  }
+  return titles.slice(0,10);
+}
 async function fetchLiveIssues(){
   const box=$('issuesBox');box.innerHTML='<span class="mut">불러오는 중…</span>';
-  if(typeof fetch==='undefined'){box.innerHTML='<span style="color:var(--red)">이 환경은 라이브 불가 — 아래 프롬프트 버튼을 쓰세요.</span>';return;}
-  const rss='https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko';
-  const wraps=[u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://corsproxy.io/?url='+encodeURIComponent(u)];
-  for(const w of wraps){
-    try{
-      const res=await fetch(w(rss),{cache:'no-store'});
-      if(!res.ok)continue;
-      const xml=await res.text();
-      const doc=new DOMParser().parseFromString(xml,'text/xml');
-      const items=Array.prototype.slice.call(doc.querySelectorAll('item')).slice(0,10);
-      const titles=items.map(it=>cleanTitle(it.querySelector('title')&&it.querySelector('title').textContent)).filter(Boolean);
-      if(titles.length){renderIssues(titles);toast('오늘의 뉴스 헤드라인 '+titles.length+'건');return;}
-    }catch(e){}
+  if(typeof fetch==='undefined'){box.innerHTML='<span style="color:var(--red)">이 환경은 라이브 불가 — "오늘의 이슈 Top10 프롬프트"를 쓰세요.</span>';return;}
+  const sources=[
+    'https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko',
+    'https://news.google.com/rss/search?q='+encodeURIComponent('부동산 OR 집값 OR 금리 OR 경제 when:1d')+'&hl=ko&gl=KR&ceid=KR:ko'
+  ];
+  const proxies=[
+    u=>({url:'https://api.allorigins.win/raw?url='+encodeURIComponent(u)}),
+    u=>({url:'https://api.codetabs.com/v1/proxy/?quest='+encodeURIComponent(u)}),
+    u=>({url:'https://api.allorigins.win/get?url='+encodeURIComponent(u),json:true}),
+    u=>({url:'https://corsproxy.io/?url='+encodeURIComponent(u)}),
+    u=>({url:'https://thingproxy.freeboard.io/fetch/'+u})
+  ];
+  for(const src of sources){
+    for(const mk of proxies){
+      try{
+        const spec=mk(src);
+        const res=await fetch(spec.url,{cache:'no-store'});
+        if(!res.ok)continue;
+        let xml=await res.text();
+        if(spec.json){try{xml=JSON.parse(xml).contents||'';}catch(e){}}
+        const titles=parseRssTitles(xml);
+        if(titles.length){renderIssues(titles);toast('오늘의 뉴스 '+titles.length+'건 · 클릭해 주제로 입력');return;}
+      }catch(e){}
+    }
   }
-  box.innerHTML='<span style="color:var(--red)">라이브 불러오기 실패(미리보기/네트워크 제한). "오늘의 이슈 Top10 프롬프트"를 사용하세요.</span>';
+  box.innerHTML='<span style="color:var(--red)">라이브 불러오기 실패. 지금 화면이 <b>미리보기(Artifact)</b>면 보안정책상 외부요청이 막힙니다 → <b>배포 사이트</b>(choijungman12.github.io/hookflow-studio)에서 실행하세요. 또는 "오늘의 이슈 Top10 프롬프트"를 사용하세요.</span>';
 }
 
 /* ---------- PDF/TXT 학습 자료 첨부 ---------- */
@@ -1575,5 +1602,5 @@ window.genSeedance=genSeedance;window.genNarration=genNarration;window.addCut=ad
 window.applyHookRoles=applyHookRoles;window.renderCards=renderCards;window.copyLeadCaption=copyLeadCaption;window.copyEl=copyEl;
 window.loadScenario=loadScenario;window.genCapcut=genCapcut;
 window.genAIPrompt=genAIPrompt;window.quickDraft=quickDraft;window.importGenerated=importGenerated;window.delSelectedPreset=delSelectedPreset;
-window.autoFillFromProject=autoFillFromProject;window.genIssuesPrompt=genIssuesPrompt;window.fetchLiveIssues=fetchLiveIssues;window.onAiFile=onAiFile;
+window.autoFillFromProject=autoFillFromProject;window.genIssuesPrompt=genIssuesPrompt;window.fetchLiveIssues=fetchLiveIssues;window.onAiFile=onAiFile;window.parseRssTitles=parseRssTitles;
 </script>
