@@ -145,9 +145,19 @@ a{color:var(--accent2)}
 <!-- settings modal -->
 <div class="mask" id="setMask">
   <div class="modal">
-    <h3>⚙ 설정 — 백엔드 연결</h3>
-    <p class="sub">실제 AI 이미지·콘티 생성을 위해 Cloudflare Worker(무료)를 연결하세요. 설치법: 저장소 <code>WORKER_SETUP.md</code></p>
-    <div class="field"><label class="f">Worker URL</label><input id="s_worker" class="i" placeholder="https://hookflow-worker.<계정>.workers.dev"></div>
+    <h3>⚙ 설정 — AI 연결</h3>
+    <p class="sub">아래 <b>둘 중 하나</b>만 하면 앱에서 바로 AI 이미지·콘티가 생성됩니다.</p>
+
+    <div class="field" style="border:1px solid var(--green);border-radius:10px;padding:12px">
+      <label class="f" style="color:var(--green)">🔑 방법 A · Gemini API 키 직접 등록 <b>(권장·간단)</b></label>
+      <input id="s_apikey" class="i" type="password" placeholder="AIza… (Google AI Studio 키)" autocomplete="off">
+      <div class="miniguide" style="margin-top:4px">키는 <b>이 브라우저에만</b> 저장(localStorage) · 깃허브/타인에게 안 보임. 무료 발급: aistudio.google.com/apikey</div>
+    </div>
+
+    <div class="field" style="margin-top:10px">
+      <label class="f">🛰️ 방법 B · Cloudflare Worker URL <span class="hint">(고급·팀 공유/영상용, 선택)</span></label>
+      <input id="s_worker" class="i" placeholder="https://hookflow-worker.<계정>.workers.dev">
+    </div>
     <div class="field" style="display:flex;gap:10px">
       <div style="flex:1"><label class="f">텍스트 모델</label><input id="s_tmodel" class="i" placeholder="gemini-2.5-flash"></div>
       <div style="flex:1"><label class="f">이미지 모델</label><input id="s_imodel" class="i" placeholder="gemini-2.5-flash-image"></div>
@@ -157,7 +167,7 @@ a{color:var(--accent2)}
       <button class="btn" onclick="saveSettings()">저장</button>
       <span id="s_result" style="align-self:center;font-size:12px"></span>
     </div>
-    <div class="callout"><b>키는 브라우저에 저장되지 않습니다.</b> Gemini/fal 키는 Worker의 Secret에만 보관되고, 앱은 Worker URL만 압니다. Worker가 없어도 템플릿 콘티·프롬프트·PDF는 사용할 수 있습니다.</div>
+    <div class="callout"><b>방법 A</b>는 키가 대표님 브라우저에만 저장돼 대표님만 씁니다(깃허브·타인 노출 없음). 이 기기 브라우저 개발자도구로는 보이니, 공유 PC에선 방법 B(Worker Secret)를 쓰세요. 둘 다 없어도 템플릿 콘티·프롬프트·PDF는 사용 가능합니다.</div>
     <div style="text-align:right;margin-top:14px"><button class="btn gh" onclick="closeSettings()">닫기</button></div>
   </div>
 </div>
@@ -186,7 +196,7 @@ const NT={
 
 let state=load();
 function blank(){return{name:'새 프로젝트',nodes:{},edges:[],view:{x:120,y:80,scale:1},seq:1,
-  settings:{worker:'',tmodel:'gemini-2.5-flash',imodel:'gemini-2.5-flash-image'}};}
+  settings:{apiKey:'',worker:'',tmodel:'gemini-2.5-flash',imodel:'gemini-2.5-flash-image'}};}
 function load(){try{const s=JSON.parse(localStorage.getItem(LS));return s&&s.nodes?s:blank();}catch(e){return blank();}}
 // 이미지 base64는 용량이 커서 저장에서 제외(런타임 메모리에만)
 function save(){
@@ -441,13 +451,52 @@ function computeOut(id,seen){
 function projOf(n){const d=n.data;return{topic:d.topic||'이 주제',format:d.format,aspect:d.format,cutCount:d.cutCount||'12',style:d.style||'photoreal cinematic commercial',hook:d.hook,slogan:d.slogan,ctx:d.ctx};}
 
 /* ---------- AI client ---------- */
+const GBASE='https://generativelanguage.googleapis.com/v1beta/models/';
 async function api(path,body){
+  const key=(state.settings.apiKey||'').trim();
   const base=(state.settings.worker||'').replace(/\/+$/,'');
-  if(!base)throw new Error('NO_WORKER');
-  const r=await fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const d=await r.json().catch(()=>({error:'응답 파싱 실패'}));
-  if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
-  return d;
+  // 방법 A: Gemini 키 직접(브라우저 CORS 허용 확인됨) — 텍스트/이미지/뉴스
+  if(key && (path==='/gemini/text'||path==='/gemini/image'||path==='/news')){
+    if(path==='/gemini/text')return await geminiTextDirect(body,key);
+    if(path==='/gemini/image')return await geminiImageDirect(body,key);
+    if(path==='/news')return await newsDirect();
+  }
+  // 방법 B: Worker
+  if(base){
+    const r=await fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({error:'응답 파싱 실패'}));
+    if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+    return d;
+  }
+  throw new Error('NO_WORKER');
+}
+async function geminiTextDirect(body,key){
+  const m=body.model||state.settings.tmodel||'gemini-2.5-flash';
+  const gc={};if(body.schema){gc.responseMimeType='application/json';gc.responseSchema=body.schema;}
+  const r=await fetch(GBASE+m+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{role:'user',parts:[{text:body.prompt}]}],generationConfig:gc})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error((d.error&&d.error.message)||('Gemini '+r.status));
+  const parts=((((d.candidates||[])[0]||{}).content)||{}).parts||[];
+  return {text:parts.map(x=>x.text||'').join('')};
+}
+async function geminiImageDirect(body,key){
+  const m=body.model||state.settings.imodel||'gemini-2.5-flash-image';
+  const parts=[{text:body.prompt}];(body.refs||[]).forEach(rf=>{if(rf&&rf.data)parts.push({inlineData:{mimeType:rf.mimeType||'image/png',data:rf.data}});});
+  const r=await fetch(GBASE+m+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{responseModalities:['IMAGE','TEXT']}})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error((d.error&&d.error.message)||('Gemini image '+r.status));
+  const op=((((d.candidates||[])[0]||{}).content)||{}).parts||[];
+  const images=op.filter(x=>x.inlineData).map(x=>({mimeType:x.inlineData.mimeType,data:x.inlineData.data}));
+  if(!images.length)throw new Error('이미지가 반환되지 않았습니다 (프롬프트/모델 확인)');
+  return {images};
+}
+async function newsDirect(){
+  const rss='https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko';
+  const proxies=[u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://api.codetabs.com/v1/proxy/?quest='+encodeURIComponent(u)];
+  for(const p of proxies){try{const r=await fetch(p(rss),{cache:'no-store'});if(!r.ok)continue;const t=await r.text();const titles=parseRssTitles(t);if(titles.length)return{titles};}catch(e){}}
+  return{titles:[]};
 }
 function busy(id,on,label){const b=document.getElementById('prev-'+id)||document.getElementById('out-'+id);
   if(on)toast((label||'생성 중')+' …');}
@@ -473,7 +522,7 @@ async function runNode(id,act){
     if(act==='card-tpl')return runCardTpl(id);
     if(act==='card-img')return await runCardImg(id);
   }catch(e){
-    if(String(e.message)==='NO_WORKER'){toast('먼저 ⚙설정에서 Worker를 연결하세요 (또는 템플릿 사용)');openSettings();}
+    if(String(e.message)==='NO_WORKER'){toast('⚙설정에서 Gemini API 키(또는 Worker)를 먼저 연결하세요 · 없으면 "상세 템플릿" 사용');openSettings();}
     else toast('오류: '+e.message);
   }
 }
@@ -703,19 +752,29 @@ function renderPrintCards(title,slides,ratio){
 }
 
 /* ---------- settings ---------- */
-function openSettings(){$('#s_worker').value=state.settings.worker||'';$('#s_tmodel').value=state.settings.tmodel;$('#s_imodel').value=state.settings.imodel;$('#s_result').textContent='';$('#setMask').classList.add('on');}
+function openSettings(){$('#s_apikey').value=state.settings.apiKey||'';$('#s_worker').value=state.settings.worker||'';$('#s_tmodel').value=state.settings.tmodel;$('#s_imodel').value=state.settings.imodel;$('#s_result').textContent='';$('#setMask').classList.add('on');}
 function closeSettings(){$('#setMask').classList.remove('on');}
-function saveSettings(){state.settings.worker=$('#s_worker').value.trim();state.settings.tmodel=$('#s_tmodel').value.trim()||'gemini-2.5-flash';state.settings.imodel=$('#s_imodel').value.trim()||'gemini-2.5-flash-image';save();updateWorkerStatus();toast('설정 저장됨');closeSettings();}
+function saveSettings(){state.settings.apiKey=$('#s_apikey').value.trim();state.settings.worker=$('#s_worker').value.trim();state.settings.tmodel=$('#s_tmodel').value.trim()||'gemini-2.5-flash';state.settings.imodel=$('#s_imodel').value.trim()||'gemini-2.5-flash-image';save();updateWorkerStatus();toast('설정 저장됨');closeSettings();}
 async function testWorker(){
-  const url=($('#s_worker').value||'').trim().replace(/\/+$/,'');const r=$('#s_result');
-  if(!url){r.textContent='URL을 입력하세요';r.style.color='var(--red)';return;}
+  const key=($('#s_apikey').value||'').trim();const url=($('#s_worker').value||'').trim().replace(/\/+$/,'');const r=$('#s_result');
   r.innerHTML='<span class="spin"></span>확인 중…';
-  try{const res=await fetch(url+'/health');const d=await res.json();
-    if(d.ok){r.style.color='var(--green)';r.textContent='연결 OK · Gemini '+(d.hasGemini?'✅':'❌(키 미설정)')+' · fal '+(d.hasFal?'✅':'—');}
-    else{r.style.color='var(--red)';r.textContent='응답 이상';}
+  try{
+    if(key){
+      const m=($('#s_tmodel').value||'gemini-2.5-flash').trim();
+      const res=await fetch(GBASE+m+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:'ping'}]}]})});
+      const d=await res.json().catch(()=>({}));
+      if(res.ok){r.style.color='var(--green)';r.textContent='Gemini 키 연결 OK ✅ (이제 앱에서 바로 생성)';}
+      else{r.style.color='var(--red)';r.textContent='키 오류: '+((d.error&&d.error.message)||res.status);}
+      return;
+    }
+    if(url){const res=await fetch(url+'/health');const d=await res.json();
+      if(d.ok){r.style.color='var(--green)';r.textContent='Worker OK · Gemini '+(d.hasGemini?'✅':'❌')+' · fal '+(d.hasFal?'✅':'—');}
+      else{r.style.color='var(--red)';r.textContent='응답 이상';}
+      return;}
+    r.style.color='var(--red)';r.textContent='Gemini API 키 또는 Worker URL을 입력하세요';
   }catch(e){r.style.color='var(--red)';r.textContent='연결 실패: '+e.message;}
 }
-function updateWorkerStatus(){const on=!!state.settings.worker;$('#wdot').classList.toggle('on',on);$('#wtxt').textContent=on?'Worker 연결됨':'Worker 미연결';}
+function updateWorkerStatus(){const on=!!(state.settings.apiKey||state.settings.worker);$('#wdot').classList.toggle('on',on);$('#wtxt').textContent=state.settings.apiKey?'Gemini 키 연결됨':(state.settings.worker?'Worker 연결됨':'AI 미연결');}
 
 /* ---------- misc ---------- */
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
