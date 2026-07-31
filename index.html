@@ -233,7 +233,7 @@ function addNode(type,x,y){
   return id;
 }
 function defaultData(type){
-  if(type==='project')return{topic:'',format:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:''};
+  if(type==='project')return{topic:'',format:'9:16',cutCount:'12',style:'photoreal cinematic commercial',hook:'shock',slogan:'결국, 답은 땅',ctx:''};
   if(type==='master')return{kind:'person',desc:'40대 신뢰감 있는 한국 여성 프리젠터',outfit:'단정한 정장, 골드 열쇠 펜던트'};
   if(type==='conti')return{cuts:[]};
   if(type==='cutimg')return{};
@@ -284,9 +284,13 @@ function renderBody(id){
   if(n.type==='project'){
     b.innerHTML=`
       <div><label class="f">주제 / 키워드</label><input class="i" data-k="topic" placeholder="예: 국민연금 고갈, 전세사기" value="${esc(d.topic)}"></div>
-      <div><label class="f">포맷</label><div class="seg" data-seg="format">
-        <button data-v="9:16" class="${d.format==='9:16'?'on':''}">9:16 릴스</button>
-        <button data-v="16:9" class="${d.format==='16:9'?'on':''}">16:9 유튜브</button></div></div>
+      <div><label class="f">포맷(화면비)</label><div class="seg" data-seg="format">
+        <button data-v="9:16" class="${d.format==='9:16'?'on':''}">9:16</button>
+        <button data-v="16:9" class="${d.format==='16:9'?'on':''}">16:9</button>
+        <button data-v="1:1" class="${d.format==='1:1'?'on':''}">1:1</button></div></div>
+      <div style="display:flex;gap:6px">
+        <div style="flex:1"><label class="f">컷 수</label><select class="i" data-k="cutCount"><option ${d.cutCount==='12'?'selected':''}>12</option><option ${d.cutCount==='14'?'selected':''}>14</option><option ${d.cutCount==='16'?'selected':''}>16</option><option ${d.cutCount==='8'?'selected':''}>8</option><option ${d.cutCount==='4'?'selected':''}>4</option></select></div>
+        <div style="flex:2"><label class="f">비주얼 스타일</label><input class="i" data-k="style" value="${esc(d.style||'')}" placeholder="photoreal cinematic commercial / anime …"></div></div>
       <div><label class="f">추가 컨텍스트 / 핵심 수치</label><textarea class="i" data-k="ctx" placeholder="예: 코스피 -35%, 서울 아파트 12억">${esc(d.ctx)}</textarea></div>
       <div><label class="f">슬로건</label><input class="i" data-k="slogan" value="${esc(d.slogan)}"></div>`;
   } else if(n.type==='master'){
@@ -302,7 +306,10 @@ function renderBody(id){
       <div id="prev-${id}">${d._img?imgTag(d._img):''}</div>`;
   } else if(n.type==='conti'){
     b.innerHTML=`
-      <div class="tabs"><button class="btn sm p" data-run="conti-ai">🎬 AI 콘티 생성</button><button class="btn sm" data-run="conti-tpl">템플릿</button></div>
+      <div class="tabs"><button class="btn sm p" data-run="conti-ai">🎬 AI 콘티 생성</button><button class="btn sm" data-run="conti-tpl">상세 템플릿</button></div>
+      <div style="display:flex;gap:5px">
+        <select class="i" data-ctpl="1"><option value="">저장된 템플릿…</option>${ctplOptions()}</select>
+        <button class="btn sm" data-run="ctpl-save" title="현재 콘티를 내 템플릿으로 저장">💾</button></div>
       <div id="prev-${id}">${contiPreview(d.cuts)}</div>`;
   } else if(n.type==='cutimg'){
     b.innerHTML=`
@@ -313,9 +320,10 @@ function renderBody(id){
   } else if(n.type==='export'){
     b.innerHTML=`
       <div class="tabs" data-seg="tab">
+        <button data-v="img" class="${d.tab==='img'?'on':''}">이미지프롬프트</button>
         <button data-v="sheet" class="${d.tab==='sheet'?'on':''}">콘티시트</button>
         <button data-v="capcut" class="${d.tab==='capcut'?'on':''}">CapCut</button>
-        <button data-v="seedance" class="${d.tab==='seedance'?'on':''}">Seedance</button>
+        <button data-v="seedance" class="${d.tab==='seedance'?'on':''}">영상(힉스필드/Seedance)</button>
         <button data-v="narr" class="${d.tab==='narr'?'on':''}">나레이션</button></div>
       <button class="btn sm p" data-run="export">생성 / 새로고침</button>
       <div class="out"><textarea id="out-${id}" readonly placeholder="입력(콘티) 연결 후 생성"></textarea></div>
@@ -366,9 +374,10 @@ function renderBody(id){
   });
   b.querySelectorAll('[data-pick]').forEach(btn=>btn.onclick=()=>{
     const t=n.data.titles[+btn.dataset.pick];n.data.picked=t;
-    n.data._proj={topic:t,aspect:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:''};
+    n.data._proj={topic:t,aspect:'9:16',cutCount:'12',style:'photoreal cinematic commercial',hook:'shock',slogan:'결국, 답은 땅',ctx:''};
     renderBody(id);scheduleSave();toast('주제 선택: '+t);
   });
+  b.querySelectorAll('select[data-ctpl]').forEach(sel=>sel.onchange=()=>loadCtpl(id,sel.value));
 }
 function esc(s){return(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function imgTag(img){return `<div class="prev"><img src="data:${img.mimeType};base64,${img.data}"></div>`;}
@@ -429,7 +438,7 @@ function computeOut(id,seen){
   if(n.type==='card'){const t=RE_TOPICS.find(x=>x.id===n.data.topic);return{...base,proj:{topic:(t?t.label:n.data.topic),aspect:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:(n.data._card&&n.data._card.hookSub)||''},card:n.data._card};}
   return base;
 }
-function projOf(n){const d=n.data;return{topic:d.topic||'이 주제',format:d.format,aspect:d.format,hook:d.hook,slogan:d.slogan,ctx:d.ctx};}
+function projOf(n){const d=n.data;return{topic:d.topic||'이 주제',format:d.format,aspect:d.format,cutCount:d.cutCount||'12',style:d.style||'photoreal cinematic commercial',hook:d.hook,slogan:d.slogan,ctx:d.ctx};}
 
 /* ---------- AI client ---------- */
 async function api(path,body){
@@ -453,6 +462,7 @@ async function runNode(id,act){
     if(act==='card-copyimg')return runCardCopyImg(id);
     if(act==='conti-ai')return await runContiAI(id);
     if(act==='conti-tpl')return runContiTpl(id);
+    if(act==='ctpl-save')return runCtplSave(id);
     if(act==='cutimg')return await runCutImg(id);
     if(act==='export')return runExport(id);
     if(act==='lead')return runLead(id);
@@ -483,9 +493,12 @@ async function runMaster(id){
   n.data._img=d.images[0];n.data._prompt=prompt;renderBody(id);scheduleSave();toast('마스터 이미지 생성 완료');
 }
 function cutImgPromptText(ctx){
-  const cuts=(ctx&&ctx.cuts)||[];const asp=(ctx.proj&&ctx.proj.aspect)||'9:16';
+  const cuts=(ctx&&ctx.cuts)||[];const asp=(ctx.proj&&ctx.proj.aspect)||'9:16';const style=(ctx.proj&&ctx.proj.style)||'photoreal cinematic commercial';
   if(!cuts.length)return'';
-  return cuts.map((c,i)=>(i+1)+'. '+(c.thumb||c.action||'')+' , '+asp+' frame'+(c.grade?', '+c.grade+' grade':'')+', photoreal cinematic, consistent presenter (use the master sheet image as reference). No watermark, NO Japanese text.').join('\n\n');
+  return cuts.map((c,i)=>{
+    const base=c.imagePrompt||((c.thumb||c.action||'')+`, ${asp} frame, ${style}`+(c.grade?', '+c.grade+' grade':'')+', consistent presenter (use the master sheet as reference), no watermark, NO Japanese text.');
+    return (i+1)+'. ['+(c.action||'')+']\n'+base;
+  }).join('\n\n');
 }
 function runCutImgPrompt(id){
   const ctx=incoming(id);const txt=cutImgPromptText(ctx);
@@ -500,45 +513,104 @@ function runCardCopyImg(id){
 }
 
 const CONTI_SCHEMA={type:'object',properties:{cuts:{type:'array',items:{type:'object',properties:{
-  action:{type:'string'},thumb:{type:'string'},camera:{type:'string'},dialogue:{type:'string'},
-  narration:{type:'string'},pron:{type:'string'},grade:{type:'string'},kb:{type:'string'},sfx:{type:'string'},durationSec:{type:'number'}
-},required:['action','thumb','dialogue','narration']}}},required:['cuts']};
+  action:{type:'string'},imagePrompt:{type:'string'},camera:{type:'string'},dialogue:{type:'string'},
+  narration:{type:'string'},pron:{type:'string'},grade:{type:'string'},bgm:{type:'string'},sfx:{type:'string'},
+  motion:{type:'string'},durationSec:{type:'number'}
+},required:['action','imagePrompt','camera','dialogue','narration']}}},required:['cuts']};
 async function runContiAI(id){
   const ctx=incoming(id);const proj=ctx.proj;
   if(!proj||!proj.topic){toast('프로젝트 노드를 연결하고 주제를 입력하세요');return;}
-  const is16=proj.aspect==='16:9';const n=is16?12:4;
-  const beat=is16?'12컷(약 36초 유튜브)':'4비트 10초 릴스(0-2s 충격 / 2-5s 심화 / 5-8s 해법=토지 / 8-10s 결론+댓글토지 DM)';
+  const asp=proj.aspect||'9:16';const n=Math.max(4,Math.min(16,+(proj.cutCount||12)));
+  const style=proj.style||'photoreal cinematic commercial';
   const prompt=[
-    '한국 부동산(토지) 마케팅 영상의 카피라이터 겸 스토리보드 감독으로서,',
-    `주제 "${proj.topic}"를 충격적 문제제기로 시작해 해결책이 "토지(땅) 매입"으로 귀결되고 댓글 「토지」→DM으로 유도하는 ${beat} 콘티를 만들어줘.`,
+    '당신은 한국 부동산(토지) 광고의 영상 감독 겸 시네마토그래퍼입니다.',
+    `주제 "${proj.topic}"로 ${n}컷짜리 영상 콘티를 만들어줘. 충격적 문제제기로 시작 → 해결책이 "토지(땅) 매입"으로 귀결 → 마지막에 댓글 「토지」→DM 유도.`,
     proj.ctx?('핵심 컨텍스트/수치: '+proj.ctx):'',
-    '규칙: dialogue/narration/action/pron 은 한국어, thumb/camera 는 영어. 일본어·실제 브랜드/종목 금지, 수익보장 표현 금지. 숫자·영어는 pron에 읽는 법 병기(예 3억→삼억).',
-    is16?'cuts 12개, durationSec 합계 약 36.':'cuts 4개, durationSec 는 2,3,3,2.',
-    'kb=캡컷 켄번즈 모션(예 slow zoom-in), grade=컬러그레이드, sfx=효과음.',
-    `총 ${n}컷.`
+    `화면비 ${asp}. 스타일 ${style}.`,
+    '각 컷은 실제 제작용으로 매우 상세하게 채워라:',
+    `- imagePrompt: 나노바나나/GPT 이미지에 그대로 붙여넣을 영어 이미지 프롬프트. 반드시 [피사체·상황] + [샷사이즈·카메라 앵글] + [렌즈(24/35/50/85mm 또는 100mm macro)] + [조명·시간대] + [색보정/무드] + [스타일: ${style}] + [디테일]을 모두 포함해 아주 구체적으로. ${asp} frame. 한글 텍스트 굽지 말 것. no watermark, no Japanese text, no real brand/logo.`,
+    '- action: 한국어 동작/역할. camera: 영어 카메라 앵글+무빙. dialogue: 한국어 화면 자막. narration: 한국어 성우 VO(자연스러운 구어체). pron: 숫자/한자어/영어 읽는 법(예 3억→삼억, ROI→아르오아이). grade: 컬러그레이드. bgm: 배경음악 무드(한국어). sfx: 효과음(한국어). motion: 이 이미지를 힉스필드/Seedance로 영상화할 때의 카메라 무빙(영어). durationSec: 컷당 2~4초.',
+    '규칙: 일본어·실제 종목/브랜드 금지, 수익보장·과장 표현 금지, 방송 안전.',
+    `총 ${n}컷. JSON만 출력.`
   ].filter(Boolean).join('\n');
-  toast('AI 콘티 생성 중…');
+  toast('AI 콘티('+n+'컷) 생성 중…');
   const d=await api('/gemini/text',{prompt,schema:CONTI_SCHEMA,model:state.settings.tmodel});
   let obj;try{obj=JSON.parse(d.text);}catch(e){throw new Error('콘티 JSON 파싱 실패');}
-  const node=state.nodes[id];node.data.cuts=(obj.cuts||[]).map(c=>({...c,dur:c.durationSec!=null?String(c.durationSec):''}));
+  const node=state.nodes[id];node.data.cuts=(obj.cuts||[]).map(c=>({...c,thumb:c.imagePrompt||c.thumb||'',dur:c.durationSec!=null?String(c.durationSec):''}));
   node.data._proj=proj;renderBody(id);scheduleSave();toast('AI 콘티 '+node.data.cuts.length+'컷 생성 완료');
 }
-function runContiTpl(id){
-  const ctx=incoming(id);const proj=ctx.proj||{topic:'이 주제',aspect:'9:16',ctx:''};
-  const is16=proj.aspect==='16:9';const t=proj.topic||'이 주제';const cx=proj.ctx||'';
-  const beats=[
-    {action:'충격 훅 (0~2s)',thumb:'a person looking anxious about '+t+', cold city light',camera:'tight close-up',dialogue:'「'+t+', 남 얘기 같으세요?」',narration:t+', 남의 이야기 같으신가요?',grade:'cool',kb:'slow zoom-in',sfx:'충격 스팅어',dur:'2'},
-    {action:'문제 심화 (2~5s)',thumb:cx?('insert visualizing: '+cx+', grey tone'):'insert, problem worsening, grey',camera:'insert',dialogue:cx?('「'+cx+'」'):'「문제는 점점 커집니다」',narration:cx?(cx.replace(/\?+$/,'')+'.'):'내버려 두면 문제는 점점 커집니다.',grade:'cold grey',kb:'push-in',sfx:'긴장음',dur:'3'},
-    {action:'해법 = 토지 (5~8s)',thumb:'warm golden-hour open Korean land, solid earth',camera:'wide',dialogue:'「하지만, 답은 땅입니다」',narration:'하지만 답은 늘 같았습니다. 사라지지 않는 자산, 땅.',grade:'warm golden',kb:'slow rise',sfx:'바람',dur:'3'},
-    {action:'결론 + 댓글「토지」DM (8~10s)',thumb:'presenter smiling between farmland and city skyline',camera:'hero',dialogue:'「댓글 ‘토지’ → '+t+' 해결 가이드 DM」',narration:'댓글에 토지. 해결 가이드를 보내드립니다.',grade:'golden hero',kb:'static hero',sfx:'상승음',dur:'2'}
+/* 상세 템플릿: 12~16컷, 컷마다 리치 이미지 프롬프트 + BGM/SFX/나레이션/모션 */
+function buildRichCuts(proj){
+  const T=proj.topic||'이 주제',ASP=proj.aspect||'9:16',CX=proj.ctx||'',STYLE=proj.style||'photoreal cinematic commercial';
+  const n=Math.max(4,Math.min(16,+(proj.cutCount||12)));
+  const P=s=>s+` ${ASP} frame, ${STYLE}, filmic, high detail. No on-screen text, no watermark, NO Japanese text, no real brand/logo.`;
+  const C=[
+   {action:'충격 훅',character:true,dur:'2',grade:'cold desaturated blue',bgm:'저음 긴장 드론, 심박 비트',sfx:'충격 스팅어',camera:'slow push-in, 85mm shallow DoF',motion:'slow dolly-in on the face',
+    imagePrompt:P(`Extreme close-up of an anxious Korean person's face lit only by cold blue screen glow in a dark room, reacting to bad news about ${T}, 85mm lens, low-key chiaroscuro lighting, desaturated cool-blue grade, tense mood, shallow depth of field.`),
+    dialogue:'「'+T+', 남 얘기 같으세요?」',narration:T+', 남의 이야기 같으신가요?',pron:''},
+   {action:'훅 강화 인서트',character:false,dur:'2',grade:'cold grey',bgm:'긴장 지속',sfx:'알림음 연타',camera:'macro insert, 100mm',motion:'fast push to detail',
+    imagePrompt:P(`Tight macro insert visualizing the shock of ${T}${CX?(': '+CX):''}, cold grey palette, harsh top light, a phone/screen with plunging red numbers, floating dust particles.`),
+    dialogue:'「지금 이 순간에도」',narration:'지금 이 순간에도 벌어지고 있습니다.',pron:''},
+   {action:'문제 심화',character:false,dur:'3',grade:'cold grey',bgm:'점증하는 불안(현악 트레몰로)',sfx:'서류 넘기는 소리',camera:'medium insert, 35mm slow track',motion:'slow lateral track across documents',
+    imagePrompt:P(`Documentary-style medium insert showing the consequence of ${T}${CX?(' — '+CX):''}, muted grey palette, overcast window light, a worried hand over paperwork and bills.`),
+    dialogue:CX?('「'+CX+'」'):'「문제는 점점 커집니다」',narration:CX?(CX.replace(/\?+$/,'')+'.'):'내버려 두면 문제는 점점 커집니다.',pron:''},
+   {action:'감정 절정(불안)',character:true,dur:'2',grade:'cold blue',bgm:'정적 직전의 긴장',sfx:'저음 럼블',camera:'over-shoulder, 50mm subtle handheld',motion:'subtle handheld drift',
+    imagePrompt:P(`Over-the-shoulder shot of a Korean person overwhelmed by ${T}, cold blue interior, a single practical lamp, deep shadows, cinematic negative space.`),
+    dialogue:'',narration:'',pron:''},
+   {action:'전환 — 빛을 향해',character:true,dur:'2',grade:'cool→warm transition',bgm:'전환 스웰(따뜻한 현악)',sfx:'빛 번짐 whoosh',camera:'profile turn, rack focus to window',motion:'rack focus + slow pan to warm light',
+    imagePrompt:P(`A Korean person turns from a dark cold room toward warm golden light spilling through a window that reveals open land, profile silhouette, rack focus, cool-to-warm color transition, hopeful.`),
+    dialogue:'「하지만, 답은 땅입니다」',narration:'하지만 답은 늘 같았습니다. 사라지지 않는 자산, 땅.',pron:''},
+   {action:'해법=토지 와이드',character:false,dur:'3',grade:'warm golden hour',bgm:'따뜻한 오케스트라 상승',sfx:'바람, 새소리',camera:'wide low-angle, 24mm',motion:'slow crane up',
+    imagePrompt:P(`Vast golden-hour open Korean farmland and fields stretching to the horizon, warm low sun, long shadows, wide low-angle 24mm, epic solid earth.`),
+    dialogue:'「땅은 사라지지 않습니다」',narration:'땅은 사라지지 않습니다.',pron:''},
+   {action:'흙·토지대장 인서트',character:false,dur:'3',grade:'warm macro',bgm:'잔잔한 피아노',sfx:'흙 만지는 소리',camera:'macro close-up, 100mm',motion:'slow push-in on soil',
+    imagePrompt:P(`Warm macro close-up of firm dark soil held in a hand, golden backlight, shallow depth of field, a faint land-register document beside, tactile texture.`),
+    dialogue:'「그리고, 움직이지 않죠」',narration:'그리고 움직이지 않죠.',pron:''},
+   {action:'개발 청사진 오버레이',character:false,dur:'3',grade:'warm + cyan blueprint glow',bgm:'미래적 신스 상승',sfx:'홀로그램 UI 사운드',camera:'top-down slow zoom',motion:'top-down zoom with glowing lines',
+    imagePrompt:P(`Aerial top-down of the same farmland with glowing blueprint/development-plan lines overlaid, warm earth with cool cyan holographic road grids, grounded-futuristic.`),
+    dialogue:'「개발이 시작되면」',narration:'개발이 시작되면,',pron:''},
+   {action:'개발 타임랩스',character:false,dur:'3',grade:'daylight→golden',bgm:'리드미컬 상승 비트',sfx:'공사장 앰비언스',camera:'time-lapse wide, crane up',motion:'time-lapse construction rising, crane up',
+    imagePrompt:P(`Time-lapse-style wide shot of construction cranes and new roads rising on former farmland, moving clouds, dust and light streaks, sense of rapid growth.`),
+    dialogue:'「도시가 만들어집니다」',narration:'도시가 만들어집니다.',pron:''},
+   {action:'가치 상승 리빌',character:false,dur:'3',grade:'golden dusk',bgm:'감정적 클라이맥스',sfx:'도시 앰비언스',camera:'rising crane reveal',motion:'crane up revealing skyline',
+    imagePrompt:P(`Gleaming new-town skyline at golden dusk risen where the field once was, glass towers catching warm light, rising crane reveal, aspirational wealth mood.`),
+    dialogue:'「가치는 계단식으로 오릅니다」',narration:'가치는 계단식으로 오릅니다.',pron:''},
+   {action:'근거·데이터',character:false,dur:'3',grade:'clean warm',bgm:'신뢰감 있는 비트',sfx:'그래프 UI',camera:'clean insert, 50mm, subtle parallax',motion:'subtle parallax on chart',
+    imagePrompt:P(`Clean cinematic insert of a rising value chart/graphic over a warm map of Korean development zones, editorial infographic style, trustworthy, no real tickers.`),
+    dialogue:'「검증된 패턴입니다」',narration:'규제 완화와 인프라, 그리고 시간. 검증된 패턴입니다.',pron:''},
+   {action:'기회 구역 지도',character:false,dur:'3',grade:'warm map glow',bgm:'탐색적 신스',sfx:'지도 하이라이트',camera:'overhead map insert',motion:'slow zoom into highlighted zones',
+    imagePrompt:P(`Overhead stylized map of Korea with several development opportunity zones glowing gold over sunset-toned terrain, cinematic cartography, premium.`),
+    dialogue:'「기회는 아직 남아 있습니다」',narration:'지금도, 똑같은 기회가 남아 있습니다.',pron:''},
+   {action:'확신의 미소(프리젠터)',character:true,dur:'2',grade:'warm bokeh',bgm:'따뜻한 여운',sfx:'잔잔한 도시 앰비언스',camera:'medium close-up, 85mm shallow DoF',motion:'slow push-in',
+    imagePrompt:P(`Medium close-up of a trustworthy Korean presenter smiling with quiet confidence, warm city bokeh behind, 85mm shallow depth of field, golden rim light, premium. Keep identity consistent with the attached master sheet.`),
+    dialogue:'「'+T+', 결국 답은 땅입니다」',narration:'결국, 답은 땅입니다.',pron:''},
+   {action:'설득 클로즈업(프리젠터)',character:true,dur:'2',grade:'warm',bgm:'결심의 스웰',sfx:'',camera:'tight front close-up, 85mm',motion:'very slow push-in',
+    imagePrompt:P(`Tight front close-up of the Korean presenter with a persuasive, direct gaze to camera, warm soft key light, shallow DoF, premium editorial. Keep identity consistent with the attached master sheet.`),
+    dialogue:'「준비된 사람만이 잡습니다」',narration:'기회는 준비된 사람의 것입니다.',pron:''},
+   {action:'상승 인서트',character:false,dur:'2',grade:'golden',bgm:'상승 시그니처',sfx:'키 사운드',camera:'insert, 50mm',motion:'slow rise',
+    imagePrompt:P(`Symbolic insert of a small gold key resting on rich soil with a new-town skyline bokeh behind at golden hour, hopeful premium mood.`),
+    dialogue:'「시작은 지금입니다」',narration:'시작은, 바로 지금입니다.',pron:''}
   ];
-  let cuts=beats;
-  if(is16){cuts=[];beats.forEach((b,i)=>{cuts.push(b);if(i===2){cuts.push(
-    {action:'대지 와이드',thumb:'vast golden farmland 16:9',camera:'wide low-angle',dialogue:'「땅은 사라지지 않습니다」',narration:'땅은 사라지지 않습니다.',grade:'warm',kb:'slow push',sfx:'바람',dur:'3'},
-    {action:'개발 타임랩스',thumb:'construction cranes rising, timelapse 16:9',camera:'crane up',dialogue:'「개발이 시작되면」',narration:'개발이 시작되면,',grade:'daylight',kb:'crane up',sfx:'공사장',dur:'3'},
-    {action:'가치 상승',thumb:'new-town skyline at dusk 16:9',camera:'rising reveal',dialogue:'「가치는 계단식으로 오릅니다」',narration:'가치는 계단식으로 오릅니다.',grade:'golden dusk',kb:'slow rise',sfx:'도시',dur:'3'});}});}
-  const node=state.nodes[id];node.data.cuts=cuts;node.data._proj=proj;renderBody(id);scheduleSave();toast('템플릿 콘티 '+cuts.length+'컷 생성');
+  const CTA={action:'CTA · 키비주얼',character:true,dur:'2',grade:'golden hero',bgm:'엔딩 시그니처',sfx:'상승 시그니처',camera:'fixed hero wide, slow crane up',motion:'slow crane up, hero hold',
+    imagePrompt:P(`Key visual: the Korean presenter standing confidently between golden farmland on one side and a city skyline on the other at golden hour, hero wide composition with empty upper area reserved for a Korean slogan overlay, aspirational. Keep identity consistent with the attached master sheet.`),
+    dialogue:'「댓글 ‘토지’ → '+T+' 해결 가이드 DM」',narration:'댓글에 토지. 해결 가이드를 보내드립니다.',pron:''};
+  const out=C.slice(0,Math.max(1,n-1));out.push(CTA);
+  return out.map(c=>({...c,thumb:c.imagePrompt}));
 }
+function runContiTpl(id){
+  const ctx=incoming(id);const proj=ctx.proj||{topic:'이 주제',aspect:'9:16',ctx:'',cutCount:'12'};
+  const cuts=buildRichCuts(proj);
+  const node=state.nodes[id];node.data.cuts=cuts;node.data._proj=proj;renderBody(id);scheduleSave();toast('상세 템플릿 콘티 '+cuts.length+'컷 생성');
+}
+/* 내 콘티 템플릿 저장/불러오기 */
+function ctplStore(){try{return JSON.parse(localStorage.getItem('hookflow_ctpl'))||{}}catch(e){return{}}}
+function ctplOptions(){return Object.keys(ctplStore()).map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('');}
+function runCtplSave(id){const cuts=state.nodes[id].data.cuts||[];if(!cuts.length){toast('저장할 콘티가 없습니다 · 먼저 생성하세요');return;}
+  const name=(typeof prompt!=='undefined')?prompt('내 템플릿 이름:'):'';if(!name)return;
+  const s=ctplStore();s[name]=cuts;try{localStorage.setItem('hookflow_ctpl',JSON.stringify(s));}catch(e){}renderBody(id);toast('템플릿 저장: '+name);}
+function loadCtpl(id,name){if(!name)return;const s=ctplStore();if(!s[name])return;
+  state.nodes[id].data.cuts=JSON.parse(JSON.stringify(s[name]));const inc=incoming(id);if(inc.proj)state.nodes[id].data._proj=inc.proj;
+  renderBody(id);scheduleSave();toast('템플릿 불러옴: '+name);}
 
 async function runCutImg(id){
   const ctx=incoming(id);const cuts=ctx.cuts||[];const proj=ctx.proj||{};
@@ -562,9 +634,15 @@ function durs(cuts,total){let fx=0,ac=0;const p=cuts.map(c=>{const d=parseFloat(
 function runExport(id){
   const ctx=incoming(id);const cuts=ctx.cuts||[];const proj=ctx.proj||{};const ta=document.getElementById('out-'+id);
   if(!cuts.length){ta.value='콘티 노드를 연결하고 콘티를 생성하세요.';return;}
-  const tab=state.nodes[id].data.tab||'sheet';const asp=proj.aspect||'9:16';const dur=asp==='16:9'?36:10;
+  const tab=state.nodes[id].data.tab||'sheet';const asp=proj.aspect||'9:16';const style=proj.style||'photoreal cinematic commercial';
+  const dur=cuts.reduce((a,c)=>a+(parseFloat(c.dur)||0),0)||(cuts.length*3);
   const L=[];
-  if(tab==='sheet'){
+  if(tab==='img'){
+    L.push('■ 컷별 이미지 프롬프트 — '+(proj.topic||'')+' · '+asp+' · '+cuts.length+'컷');
+    L.push('나노바나나 / GPT 이미지(챗 이미지)에 컷별로 붙여넣어 이미지 생성 → 만든 이미지를 힉스필드/Seedance에 넣어 영상화.');
+    L.push('프리젠터 일관성: ② 마스터 시트 이미지를 참조로 함께 첨부하세요.');
+    cuts.forEach((c,i)=>{L.push('');L.push('── 컷 '+(i+1)+' ('+(c.action||'')+') ──');L.push(c.imagePrompt||((c.thumb||'')+', '+asp+' frame, '+style+(c.grade?', '+c.grade+' grade':'')+', no watermark, NO Japanese text.'));});
+  } else if(tab==='sheet'){
     const rows=asp==='16:9'?3:2,cols=Math.ceil(cuts.length/rows);
     L.push('You are a commercial director and storyboard artist. Generate ONE horizontal AD STORYBOARD SHEET (콘티) on a light cream background, thin grey cell borders.');
     L.push('Title bar: 토지 콘티 「'+(proj.topic||'')+'」 — '+dur+'초 / '+cuts.length+'컷 · AUDIO — BGM + SFX');
@@ -579,21 +657,24 @@ function runExport(id){
     L.push('스틸 '+cuts.length+'장 생성 → 캡컷 켄번즈 → TTS+자막. AI 영상생성 결제 불필요.');
     cuts.forEach((c,i)=>{const s=t.toFixed(1),e=(t+D[i]).toFixed(1);t+=D[i];
       L.push('');L.push('── 컷 '+(i+1)+' ['+s+'–'+e+'s] '+(c.action||'')+' ──');
-      L.push('🖼 스틸: '+(c.thumb||'')+' , '+asp+(c.grade?', '+c.grade:''));
-      L.push('🎞 켄번즈: '+(c.kb||'slow zoom-in'));
+      L.push('🖼 스틸 프롬프트: '+(c.imagePrompt||c.thumb||''));
+      L.push('🎞 모션(켄번즈): '+(c.motion||c.kb||'slow zoom-in'));
       if(c.dialogue)L.push('💬 자막: '+c.dialogue+' (흰 글자+검정 외곽선, 숫자 노랑)');
       if(c.narration)L.push('🎙 나레이션: '+c.narration);
       if(c.pron)L.push('🗣 발음: '+c.pron);
+      if(c.bgm)L.push('🎵 BGM: '+c.bgm);
+      if(c.sfx)L.push('🔊 SFX: '+c.sfx);
     });
     L.push('');L.push('[CTA] 마지막 컷 하단: "댓글 「토지」 → DM · 과거 사례이며 수익보장 아님"');
   } else if(tab==='seedance'){
     const D=durs(cuts,dur);
     L.push('=== Seedance 영상 프롬프트 — '+(proj.topic||'')+' | '+asp+' ===');
     cuts.forEach((c,i)=>{L.push('');L.push('── CUT '+(i+1)+' / '+D[i].toFixed(1)+'s / '+asp+' ──');
-      L.push('Scene: '+(c.thumb||c.action));L.push('Camera: '+(c.camera||'locked')+', '+(c.kb||''));
-      L.push('Grade: '+(c.grade||'cinematic'));const au=[];if(c.dialogue)au.push('caption '+c.dialogue);if(c.narration)au.push('VO(KR): '+c.narration);L.push('Audio: '+(au.join(' | ')||'ambient SFX'));
+      L.push('Scene: '+(c.imagePrompt||c.thumb||c.action));L.push('Camera motion: '+(c.motion||c.kb||'slow push-in')+(c.camera?(' | '+c.camera):''));
+      L.push('Grade: '+(c.grade||'cinematic'));
+      const au=[];if(c.dialogue)au.push('caption '+c.dialogue);if(c.narration)au.push('VO(KR): '+c.narration);if(c.bgm)au.push('BGM '+c.bgm);if(c.sfx)au.push('SFX '+c.sfx);L.push('Audio: '+(au.join(' | ')||'ambient SFX'));
       L.push('Negatives: no text artifacts, no watermark, keep identity.');});
-    L.push('');L.push('[TIP] fal.ai Seedance 720p 5초 ≈ $0.05 · 핵심 컷만 생성 후 편집에서 연결.');
+    L.push('');L.push('[힉스필드/Seedance] 위 이미지(나노바나나 등에서 제작)를 입력하고 각 컷 Camera motion으로 영상화. fal.ai Seedance 720p 5초 ≈ $0.05.');
   } else if(tab==='narr'){
     const D=durs(cuts,dur);let t=0;
     L.push('■ 나레이션 스크립트 — '+(proj.topic||'')+' (총 '+dur+'초)');
