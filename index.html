@@ -259,14 +259,14 @@ function addNode(type,x,y){
 }
 function defaultData(type){
   if(type==='project')return{topic:'',format:'9:16',cutCount:'12',style:'photoreal cinematic commercial',hook:'shock',slogan:'결국, 답은 땅',ctx:''};
-  if(type==='master')return{kind:'person',desc:'40~50대 한국 여성 인플루언서, 세련되고 자신감 있는 분위기',look:'우아 글래머',outfit:'tailored power suit, elegant'};
+  if(type==='master')return{kind:'person',desc:'40~50대 한국 여성 인플루언서, 세련되고 자신감 있는 분위기',look:'우아 글래머',outfit:'tailored power suit, elegant',setting:'세련된 도심 라이프스타일, 프리미엄 스튜디오'};
   if(type==='conti')return{cuts:[]};
   if(type==='cutimg')return{};
   if(type==='export')return{tab:'sheet'};
   if(type==='lead')return{};
   if(type==='trends')return{titles:[],picked:''};
   if(type==='video')return{res:'720p',dur:'5'};
-  if(type==='card')return{topic:(RE_TOPICS[0]&&RE_TOPICS[0].id)||'nongji_pension',audience:'general'};
+  if(type==='card')return{customTopic:'',topic:(RE_TOPICS[0]&&RE_TOPICS[0].id)||'nongji_pension',audience:'general',keyword:'부동산'};
   return{};
 }
 function delNode(id){delete state.nodes[id];state.edges=state.edges.filter(e=>e.from!==id&&e.to!==id);
@@ -329,6 +329,7 @@ function renderBody(id){
         <div style="flex:1"><label class="f">룩 / 무드</label><select class="i" data-k="look">${LOOKS.map(o=>`<option ${d.look===o?'selected':''}>${o}</option>`).join('')}</select></div>
         <div style="flex:1"><label class="f">의상 프리셋</label><select class="i" data-outfit="1"><option value="">선택…</option>${OUTFITS.map(o=>`<option value="${esc(o.v)}">${esc(o.l)}</option>`).join('')}</select></div></div>`:''}
       <div><label class="f">의상 / 디자인</label><input class="i" data-k="outfit" value="${esc(d.outfit)}"></div>
+      ${d.kind==='person'?`<div><label class="f">배경 / 장소</label><input class="i" data-k="setting" value="${esc(d.setting||'')}" placeholder="예: 세련된 도심 카페, 프리미엄 스튜디오, 강남 오피스, 리조트"></div>`:''}
       <div class="tabs"><button class="btn sm p" data-run="master-prompt">📋 이미지 프롬프트</button><button class="btn sm" data-run="master">키/Worker로 생성</button></div>
       <div class="out"><textarea id="mp-${id}" readonly placeholder="프롬프트 생성 → 복사 → GenSpark/Nano Banana 등에 붙여 이미지 제작">${esc(d._prompt||'')}</textarea></div>
       <button class="btn sm" data-run="copy:mp-${id}">복사</button>
@@ -378,11 +379,14 @@ function renderBody(id){
       <div id="prev-${id}">${videoPrev(d._jobs)}</div>`;
   } else if(n.type==='card'){
     b.innerHTML=`
-      <div><label class="f">주제</label><select class="i" data-k="topic">${RE_TOPICS.map(t=>`<option ${d.topic===t.id?'selected':''} value="${t.id}">${esc(t.label)}</option>`).join('')}</select></div>
-      <div><label class="f">타깃</label><div class="seg" data-seg="audience">
-        <button data-v="general" class="${d.audience==='general'?'on':''}">일반</button>
-        <button data-v="newbie" class="${d.audience==='newbie'?'on':''}">사회초년생</button>
-        <button data-v="retire" class="${d.audience==='retire'?'on':''}">은퇴자</button></div></div>
+      <div><label class="f">주제/키워드 직접 입력 <span class="hint">(비우면 아래 프리셋)</span></label><input class="i" data-k="customTopic" placeholder="예: 노후준비, 자산 리밸런싱, 주식 투자자" value="${esc(d.customTopic||'')}"></div>
+      <div><label class="f">프리셋 주제</label><select class="i" data-k="topic">${RE_TOPICS.map(t=>`<option ${d.topic===t.id?'selected':''} value="${t.id}">${esc(t.label)}</option>`).join('')}</select></div>
+      <div style="display:flex;gap:6px">
+        <div style="flex:1.4"><label class="f">타깃</label><div class="seg" data-seg="audience">
+          <button data-v="general" class="${d.audience==='general'?'on':''}">일반</button>
+          <button data-v="newbie" class="${d.audience==='newbie'?'on':''}">초년생</button>
+          <button data-v="retire" class="${d.audience==='retire'?'on':''}">은퇴자</button></div></div>
+        <div style="flex:1"><label class="f">DM 키워드</label><input class="i" data-k="keyword" value="${esc(d.keyword||'부동산')}"></div></div>
       <div class="tabs"><button class="btn sm p" data-run="card-ai">🃏 AI 카드뉴스10+해결</button><button class="btn sm" data-run="card-tpl">템플릿</button></div>
       <button class="btn sm" data-run="card-copyimg">📋 카드뉴스 10장 프롬프트(한글자막)</button>
       <button class="btn sm" data-run="card-img">키/Worker로 10장 이미지 생성</button>
@@ -465,7 +469,7 @@ function computeOut(id,seen){
   if(n.type==='conti')return{...base,cuts:n.data.cuts||[],proj:n.data._proj||base.proj};
   if(n.type==='cutimg')return{...base,cutImages:n.data._imgs||[]};
   if(n.type==='trends')return{proj:n.data._proj||(n.data.picked?{topic:n.data.picked,aspect:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:''}:base.proj)};
-  if(n.type==='card'){const t=RE_TOPICS.find(x=>x.id===n.data.topic);return{...base,proj:{topic:(t?t.label:n.data.topic),aspect:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:(n.data._card&&n.data._card.hookSub)||''},card:n.data._card};}
+  if(n.type==='card'){const t=cardTopic(n);return{...base,proj:{topic:t.label,aspect:'9:16',cutCount:'12',style:'photoreal cinematic commercial',hook:'shock',slogan:'결국, 답은 부동산',ctx:(n.data._card&&n.data._card.hookSub)||''},card:n.data._card};}
   return base;
 }
 function projOf(n){const d=n.data;return{topic:d.topic||'이 주제',format:d.format,aspect:d.format,cutCount:d.cutCount||'12',style:d.style||'photoreal cinematic commercial',hook:d.hook,slogan:d.slogan,ctx:d.ctx};}
@@ -586,16 +590,14 @@ async function runNode(id,act){
 }
 
 function masterImgPrompt(n,ctx){
-  const proj=(ctx&&ctx.proj)||{};const isP=n.data.kind==='person';
+  const proj=(ctx&&ctx.proj)||{};const asp=proj.aspect||'9:16';const isP=n.data.kind==='person';
   const LK={'우아 글래머':'elegant glamorous, confident, well-groomed, fashionable, flattering silhouette','시크 모던':'chic modern, sleek, confident','프로페셔널':'professional, polished, authoritative','캐주얼 시크':'casual chic, effortless','리조트':'resort luxury, relaxed elegant'};
   const look=LK[n.data.look]||n.data.look||'elegant, confident';
-  return (isP
-    ? `Character reference sheet on a light cream background, labeled panels 정면/3-4/측면/전신/표정. Same identity in every panel. Character: ${n.data.desc}, ${look}. Outfit: ${n.data.outfit}. Fully clothed, classy, tasteful, broadcast-safe.`
-    : `Product reference sheet on light background: HERO / 360 (front-side-back) / DETAIL macro. Product: ${n.data.desc}. Design: ${n.data.outfit}. No real brand logos.`)
-    +` Photoreal cinematic. Korean labels only, NO Japanese text, no watermark. Format hint ${proj.aspect||'9:16'}.`;
+  if(isP)return `Ultra-realistic lifestyle influencer character reference sheet, ${asp} vertical, panels 정면/3-4/측면/전신/표정 with the SAME identity in every panel. Subject: ${n.data.desc}, ${look}. Wearing ${n.data.outfit}, fully clothed, tasteful, broadcast-safe. Setting: ${n.data.setting||'clean editorial studio / premium lifestyle backdrop'}. Composition: three-quarter to close-up, slightly low angle, rule-of-thirds, confident natural editorial pose. Lighting: soft diffused key light + warm rim light, flattering even skin with gentle highlights. Lens look: 50-85mm, shallow depth of field, creamy bokeh. Color palette: warm natural tones. Aesthetic: premium social-media influencer, magazine-quality, realistic skin texture and pores, high detail, award-winning portrait photography. Korean labels only. No explicit content, no sexualized or revealing framing. No watermark, NO Japanese text, no real brand/logo.`;
+  return `Product reference sheet on light background: HERO / 360 (front-side-back) / DETAIL macro. Product: ${n.data.desc}. Design: ${n.data.outfit}. No real brand logos. Photoreal cinematic. Korean labels only, NO Japanese text, no watermark. Format hint ${asp}.`;
 }
 function runMasterPrompt(id){const n=state.nodes[id];n.data._prompt=masterImgPrompt(n,incoming(id));renderBody(id);scheduleSave();copyStr(n.data._prompt);toast('마스터 이미지 프롬프트 생성·복사 · GenSpark/Nano Banana에 붙여넣기');}
-function runMasterInfluencer(id){const n=state.nodes[id];n.data.kind='person';n.data.desc='40~50대 한국 여성 인플루언서, 세련되고 자신감 있는 글래머러스한 분위기, 관리된 몸매, 화려하고 감각적인 스타일';n.data.look='우아 글래머';if(!n.data.outfit)n.data.outfit='tailored power suit, elegant';renderBody(id);scheduleSave();toast('인플루언서 프리셋 적용 (우아·글래머러스, 방송안전)');}
+function runMasterInfluencer(id){const n=state.nodes[id];n.data.kind='person';n.data.desc='40~50대 한국 여성 인플루언서, 세련되고 자신감 있는 글래머러스한 분위기, 관리된 몸매, 감각적이고 화려한 스타일';n.data.look='우아 글래머';if(!n.data.outfit)n.data.outfit='tailored power suit, elegant';if(!n.data.setting)n.data.setting='세련된 도심 라이프스타일, 프리미엄 스튜디오';renderBody(id);scheduleSave();toast('인플루언서 프리셋 적용 (우아·글래머러스·화보풍, 방송안전)');}
 async function runProjField(id,kind){
   const n=state.nodes[id];const topic=(n.data.topic||'').trim();
   if(!topic){toast('먼저 주제를 입력하세요');return;}
@@ -638,7 +640,7 @@ function runCutImgPrompt(id){
 }
 function runCardCopyImg(id){
   const n=state.nodes[id];const t=cardTopic(n);
-  let cn=(n.data._card&&n.data._card.cardNews);if(!cn||!cn.length)cn=cardNewsTpl(t,AUD[n.data.audience]||'일반');
+  let cn=(n.data._card&&n.data._card.cardNews);if(!cn||!cn.length)cn=cardNewsTpl(t,AUD[n.data.audience]||'일반',(n.data.keyword||'부동산').trim());
   const txt='■ '+t.label+' 카드뉴스 '+cn.length+'장 (한글 자막 포함 · 나노바나나/GPT 이미지에 장별로 붙여넣기)\n\n'+
     cn.map((s,i)=>('── 카드 '+(i+1)+'/'+cn.length+' ──\n'+(s.imagePrompt||cardSlidePrompt(s,t,i,cn.length)))).join('\n\n');
   copyStr(txt);toast('카드뉴스 '+cn.length+'장 프롬프트 복사(한글 자막)');
@@ -681,58 +683,47 @@ function buildRichCuts(proj){
   const rnd=a=>a[Math.floor(Math.random()*a.length)];
   // 컷마다 앵글·VFX를 랜덤 주입 → 배경·구도 다양화(재생성마다 달라짐)
   const P=s=>s+`, ${rnd(ANG)} composition, ${rnd(VFX)}, ${ASP} frame, ${STYLE}, filmic, high detail. Distinct varied shot. No on-screen text, no watermark, NO Japanese text, no real brand/logo.`;
-  const C=[
-   {action:'충격 훅',character:true,dur:'2',grade:'cold desaturated blue',bgm:'저음 긴장 드론, 심박 비트',sfx:'충격 스팅어',camera:'slow push-in, 85mm shallow DoF',motion:'slow dolly-in on the face',
-    imagePrompt:P(`Extreme close-up of an anxious Korean person's face lit only by cold blue screen glow in a dark room, reacting to bad news about ${T}, 85mm lens, low-key chiaroscuro lighting, desaturated cool-blue grade, tense mood, shallow depth of field.`),
-    dialogue:'「'+T+', 남 얘기 같으세요?」',narration:T+', 남의 이야기 같으신가요?',pron:''},
-   {action:'훅 강화 인서트',character:false,dur:'2',grade:'cold grey',bgm:'긴장 지속',sfx:'알림음 연타',camera:'macro insert, 100mm',motion:'fast push to detail',
-    imagePrompt:P(`Tight macro insert visualizing the shock of ${T}${CX?(': '+CX):''}, cold grey palette, harsh top light, a phone/screen with plunging red numbers, floating dust particles.`),
-    dialogue:'「지금 이 순간에도」',narration:'지금 이 순간에도 벌어지고 있습니다.',pron:''},
-   {action:'문제 심화',character:false,dur:'3',grade:'cold grey',bgm:'점증하는 불안(현악 트레몰로)',sfx:'서류 넘기는 소리',camera:'medium insert, 35mm slow track',motion:'slow lateral track across documents',
-    imagePrompt:P(`Documentary-style medium insert showing the consequence of ${T}${CX?(' — '+CX):''}, muted grey palette, overcast window light, a worried hand over paperwork and bills.`),
-    dialogue:CX?('「'+CX+'」'):'「문제는 점점 커집니다」',narration:CX?(CX.replace(/\?+$/,'')+'.'):'내버려 두면 문제는 점점 커집니다.',pron:''},
-   {action:'감정 절정(불안)',character:true,dur:'2',grade:'cold blue',bgm:'정적 직전의 긴장',sfx:'저음 럼블',camera:'over-shoulder, 50mm subtle handheld',motion:'subtle handheld drift',
-    imagePrompt:P(`Over-the-shoulder shot of a Korean person overwhelmed by ${T}, cold blue interior, a single practical lamp, deep shadows, cinematic negative space.`),
-    dialogue:'',narration:'',pron:''},
-   {action:'전환 — 빛을 향해',character:true,dur:'2',grade:'cool→warm transition',bgm:'전환 스웰(따뜻한 현악)',sfx:'빛 번짐 whoosh',camera:'profile turn, rack focus to window',motion:'rack focus + slow pan to warm light',
-    imagePrompt:P(`A Korean person turns from a dark cold room toward warm golden light spilling through a window that reveals open land, profile silhouette, rack focus, cool-to-warm color transition, hopeful.`),
-    dialogue:'「하지만, 답은 땅입니다」',narration:'하지만 답은 늘 같았습니다. 사라지지 않는 자산, 땅.',pron:''},
-   {action:'해법=토지 와이드',character:false,dur:'3',grade:'warm golden hour',bgm:'따뜻한 오케스트라 상승',sfx:'바람, 새소리',camera:'wide low-angle, 24mm',motion:'slow crane up',
-    imagePrompt:P(`Vast golden-hour open Korean farmland and fields stretching to the horizon, warm low sun, long shadows, wide low-angle 24mm, epic solid earth.`),
-    dialogue:'「땅은 사라지지 않습니다」',narration:'땅은 사라지지 않습니다.',pron:''},
-   {action:'흙·토지대장 인서트',character:false,dur:'3',grade:'warm macro',bgm:'잔잔한 피아노',sfx:'흙 만지는 소리',camera:'macro close-up, 100mm',motion:'slow push-in on soil',
-    imagePrompt:P(`Warm macro close-up of firm dark soil held in a hand, golden backlight, shallow depth of field, a faint land-register document beside, tactile texture.`),
-    dialogue:'「그리고, 움직이지 않죠」',narration:'그리고 움직이지 않죠.',pron:''},
-   {action:'개발 청사진 오버레이',character:false,dur:'3',grade:'warm + cyan blueprint glow',bgm:'미래적 신스 상승',sfx:'홀로그램 UI 사운드',camera:'top-down slow zoom',motion:'top-down zoom with glowing lines',
-    imagePrompt:P(`Aerial top-down of the same farmland with glowing blueprint/development-plan lines overlaid, warm earth with cool cyan holographic road grids, grounded-futuristic.`),
-    dialogue:'「개발이 시작되면」',narration:'개발이 시작되면,',pron:''},
-   {action:'개발 타임랩스',character:false,dur:'3',grade:'daylight→golden',bgm:'리드미컬 상승 비트',sfx:'공사장 앰비언스',camera:'time-lapse wide, crane up',motion:'time-lapse construction rising, crane up',
-    imagePrompt:P(`Time-lapse-style wide shot of construction cranes and new roads rising on former farmland, moving clouds, dust and light streaks, sense of rapid growth.`),
-    dialogue:'「도시가 만들어집니다」',narration:'도시가 만들어집니다.',pron:''},
-   {action:'가치 상승 리빌',character:false,dur:'3',grade:'golden dusk',bgm:'감정적 클라이맥스',sfx:'도시 앰비언스',camera:'rising crane reveal',motion:'crane up revealing skyline',
-    imagePrompt:P(`Gleaming new-town skyline at golden dusk risen where the field once was, glass towers catching warm light, rising crane reveal, aspirational wealth mood.`),
-    dialogue:'「가치는 계단식으로 오릅니다」',narration:'가치는 계단식으로 오릅니다.',pron:''},
-   {action:'근거·데이터',character:false,dur:'3',grade:'clean warm',bgm:'신뢰감 있는 비트',sfx:'그래프 UI',camera:'clean insert, 50mm, subtle parallax',motion:'subtle parallax on chart',
-    imagePrompt:P(`Clean cinematic insert of a rising value chart/graphic over a warm map of Korean development zones, editorial infographic style, trustworthy, no real tickers.`),
-    dialogue:'「검증된 패턴입니다」',narration:'규제 완화와 인프라, 그리고 시간. 검증된 패턴입니다.',pron:''},
-   {action:'기회 구역 지도',character:false,dur:'3',grade:'warm map glow',bgm:'탐색적 신스',sfx:'지도 하이라이트',camera:'overhead map insert',motion:'slow zoom into highlighted zones',
-    imagePrompt:P(`Overhead stylized map of Korea with several development opportunity zones glowing gold over sunset-toned terrain, cinematic cartography, premium.`),
-    dialogue:'「기회는 아직 남아 있습니다」',narration:'지금도, 똑같은 기회가 남아 있습니다.',pron:''},
-   {action:'확신의 미소(프리젠터)',character:true,dur:'2',grade:'warm bokeh',bgm:'따뜻한 여운',sfx:'잔잔한 도시 앰비언스',camera:'medium close-up, 85mm shallow DoF',motion:'slow push-in',
-    imagePrompt:P(`Medium close-up of a trustworthy Korean presenter smiling with quiet confidence, warm city bokeh behind, 85mm shallow depth of field, golden rim light, premium. Keep identity consistent with the attached master sheet.`),
-    dialogue:'「'+T+', 결국 답은 땅입니다」',narration:'결국, 답은 땅입니다.',pron:''},
-   {action:'설득 클로즈업(프리젠터)',character:true,dur:'2',grade:'warm',bgm:'결심의 스웰',sfx:'',camera:'tight front close-up, 85mm',motion:'very slow push-in',
-    imagePrompt:P(`Tight front close-up of the Korean presenter with a persuasive, direct gaze to camera, warm soft key light, shallow DoF, premium editorial. Keep identity consistent with the attached master sheet.`),
-    dialogue:'「준비된 사람만이 잡습니다」',narration:'기회는 준비된 사람의 것입니다.',pron:''},
-   {action:'상승 인서트',character:false,dur:'2',grade:'golden',bgm:'상승 시그니처',sfx:'키 사운드',camera:'insert, 50mm',motion:'slow rise',
-    imagePrompt:P(`Symbolic insert of a small gold key resting on rich soil with a new-town skyline bokeh behind at golden hour, hopeful premium mood.`),
-    dialogue:'「시작은 지금입니다」',narration:'시작은, 바로 지금입니다.',pron:''}
+  const KW=(proj.keyword||'부동산');
+  const pick=(arr,k)=>{const c=arr.slice(),o=[];while(o.length<k&&c.length)o.push(c.splice(Math.floor(Math.random()*c.length),1)[0]);return o;};
+  // 문제 씬(주제 반영) 풀 — 매 생성마다 다르게
+  const PROB=[
+    `a cinematic scene about the problem of "${T}"${CX?(' — '+CX):''}: a worried Korean person in a setting specific to this topic, contextual props`,
+    `documentary insert for "${T}": relevant Korean documents/phone/monitor showing the issue${CX?(' ('+CX+')'):''}, cold desaturated tone`,
+    `symbolic still-life for "${T}": props and objects that convey the topic, moody dramatic light`,
+    `a Korean person inside an environment unique to "${T}" reacting with concern, specific detailed background`,
+    `editorial data/graphic about "${T}"${CX?(': '+CX):''}, clean infographic mood, no real tickers`,
+    `a candid street or interior moment showing the everyday impact of "${T}", muted realistic tone`
   ];
-  const CTA={action:'CTA · 키비주얼',character:true,dur:'2',grade:'golden hero',bgm:'엔딩 시그니처',sfx:'상승 시그니처',camera:'fixed hero wide, slow crane up',motion:'slow crane up, hero hold',
-    imagePrompt:P(`Key visual: the Korean presenter standing confidently between golden farmland on one side and a city skyline on the other at golden hour, hero wide composition with empty upper area reserved for a Korean slogan overlay, aspirational. Keep identity consistent with the attached master sheet.`),
-    dialogue:'「댓글 ‘토지’ → '+T+' 해결 가이드 DM」',narration:'댓글에 토지. 해결 가이드를 보내드립니다.',pron:''};
-  const out=C.slice(0,Math.max(1,n-1));out.push(CTA);
-  return out.map(c=>({...c,thumb:c.imagePrompt}));
+  // 부동산 해법 씬(12종 다양) 풀
+  const SOL=[
+    'golden-hour Korean farmland and open land, epic solid earth',
+    'a modern Korean apartment complex at dusk with warm glowing windows',
+    'a gleaming new-town skyline rising at golden hour',
+    'a lively commercial storefront district, prosperous mood',
+    'a warm aspirational model-house interior with natural light',
+    'construction cranes and fresh roads rising, sense of growth',
+    'an overhead map of Korea with glowing development opportunity zones',
+    'macro of a house key and property contract on a warm wooden desk',
+    'a redevelopment district mid-transformation, hopeful energy',
+    'riverside development land at sunset with a city forming beyond',
+    'a bright real-estate agency scene reviewing property plans',
+    'aerial drone view of mixed housing and green land, prosperous'
+  ];
+  const solN=Math.max(3,n-6);
+  const solScenes=pick(SOL,Math.min(solN,SOL.length));while(solScenes.length<solN)solScenes.push(rnd(SOL));
+  const probScenes=pick(PROB,Math.min(4,PROB.length));
+  const solLines=[['「사라지지 않는 실물 자산」','사라지지 않는 실물 자산입니다.'],['「가치가 쌓이는 곳」','가치가 차곡차곡 쌓입니다.'],['「개발과 함께 오릅니다」','개발과 함께 가치가 오릅니다.'],['「도시가 만들어질 때」','도시가 만들어질 때 부가 따라옵니다.'],['「흔들리지 않는 중심」','변동성에도 흔들리지 않는 중심.'],['「기회는 지금도」','기회는 지금도 남아 있습니다.'],['「실물로 리밸런싱」','주식·현금을 실물로 리밸런싱하세요.'],['「검증된 패턴」','규제완화·인프라·시간, 검증된 패턴.']];
+  const cuts=[];
+  cuts.push({action:'충격 훅',character:false,dur:'2',grade:'cold desaturated',bgm:'저음 긴장 드론, 심박',sfx:'충격 스팅어',camera:'push-in',motion:'slow dolly-in',imagePrompt:P(probScenes[0]||PROB[0]),dialogue:'「'+T+', 남 얘기 같으세요?」',narration:T+', 남의 이야기 같으신가요?',pron:''});
+  cuts.push({action:'문제 심화',character:false,dur:'3',grade:'cold grey',bgm:'점증 불안',sfx:'긴장음',camera:'insert',motion:'slow push',imagePrompt:P(probScenes[1]||PROB[1]),dialogue:CX?('「'+CX+'」'):'「문제는 점점 커집니다」',narration:CX?(CX.replace(/\?+$/,'')+'.'):'내버려 두면 문제는 점점 커집니다.',pron:''});
+  if(n>=6)cuts.push({action:'문제 심화2',character:false,dur:'2',grade:'cold',bgm:'긴장',sfx:'저음 럼블',camera:'insert',motion:'slow track',imagePrompt:P(probScenes[2]||rnd(PROB)),dialogue:'「지금도 벌어지고 있죠」',narration:'지금 이 순간에도 벌어지고 있습니다.',pron:''});
+  cuts.push({action:'전환 — 부동산으로',character:true,dur:'2',grade:'cool→warm',bgm:'전환 스웰',sfx:'빛 번짐 whoosh',camera:'profile turn, rack focus',motion:'rack focus + pan to warm light',imagePrompt:P('a Korean presenter turning from a cold scene toward warm light revealing Korean real-estate/property, hopeful cool-to-warm transition. Keep identity consistent with the attached master sheet'),dialogue:'「하지만, 답은 부동산입니다」',narration:'하지만 답은 늘 같았습니다. 실물 자산, 부동산.',pron:''});
+  solScenes.forEach((sc,i)=>{const gl=['warm golden hour','golden dusk','warm daylight','warm cinematic'][i%4];const ln=solLines[i%solLines.length];cuts.push({action:'부동산 해법 '+(i+1),character:false,dur:'3',grade:gl,bgm:'따뜻한 상승',sfx:i%2?'도시 앰비언스':'바람',camera:['wide low-angle','crane up','aerial','macro'][i%4],motion:['slow rise','crane up','slow push','slow zoom'][i%4],imagePrompt:P(sc),dialogue:ln[0],narration:ln[1],pron:''});});
+  if(cuts.length<n-1)cuts.push({action:'확신(프리젠터)',character:true,dur:'2',grade:'warm bokeh',bgm:'따뜻한 여운',sfx:'상승음',camera:'medium close-up, 85mm',motion:'slow push-in',imagePrompt:P('a trustworthy Korean presenter smiling with quiet confidence, warm city bokeh, premium editorial. Keep identity consistent with the attached master sheet'),dialogue:'「'+T+', 결국 답은 부동산입니다」',narration:'결국, 답은 부동산 투자입니다.',pron:''});
+  while(cuts.length>n-1)cuts.pop();
+  while(cuts.length<n-1)cuts.push({action:'부동산 인서트',character:false,dur:'2',grade:'warm',bgm:'상승',sfx:'키 사운드',camera:'insert',motion:'slow rise',imagePrompt:P(rnd(SOL)),dialogue:'「지금이 시작입니다」',narration:'시작은, 바로 지금입니다.',pron:''});
+  cuts.push({action:'CTA · 키비주얼',character:true,dur:'2',grade:'golden hero',bgm:'엔딩 시그니처',sfx:'상승 시그니처',camera:'fixed hero wide, crane up',motion:'slow crane up',imagePrompt:P('key visual: a Korean presenter standing confidently in front of an aspirational Korean real-estate scene (apartments/new-town/land), hero wide with empty upper area for a Korean slogan overlay. Keep identity consistent with the attached master sheet'),dialogue:'「댓글 ‘'+KW+'’ → '+T+' 부동산 투자 가이드 DM」',narration:'댓글에 '+KW+'. 투자 가이드를 보내드립니다.',pron:''});
+  return cuts.map(c=>({...c,thumb:c.imagePrompt}));
 }
 function runContiTpl(id){
   const ctx=incoming(id);const proj=ctx.proj||{topic:'이 주제',aspect:'9:16',ctx:'',cutCount:'12'};
@@ -974,19 +965,28 @@ const CARD_SCHEMA={type:'object',properties:{
   cardNews:{type:'array',items:{type:'object',properties:{t:{type:'string'},b:{type:'string'},imagePrompt:{type:'string'}},required:['t','imagePrompt']}}
 },required:['hookQuestion','dmSolution','cardNews']};
 const AUD={general:'일반',newbie:'사회초년생',retire:'은퇴자'};
-function cardTopic(n){return RE_TOPICS.find(t=>t.id===n.data.topic)||RE_TOPICS[0];}
+function cardTopic(n){
+  const ct=(n.data.customTopic||'').trim();
+  if(ct)return{id:'custom',label:ct,
+    q:ct+', 지금 이대로 괜찮으세요?',
+    sol:['현재 자산 구조의 한계 진단','노후·미래를 위한 자산 리밸런싱 원칙','주식·현금의 변동성 vs 실물 부동산','부동산 비중을 늘리는 실전 방법','소액부터 시작하는 부동산 투자 체크']};
+  return RE_TOPICS.find(t=>t.id===n.data.topic)||RE_TOPICS[0];
+}
 function cardSlidePrompt(s,t,i,n){
   return `Instagram card-news slide ${i+1}/${n}, 4:5 vertical, theme "${t.label}" (Korean real-estate & finance). Modern clean Korean editorial card design with a tasteful, topic-specific background photo/illustration about ${t.label} (vary the visual each slide). Render this EXACT Korean text large, bold and perfectly legible on the card — HEADLINE: 「${s.t}」${s.b?(' , SUBTEXT: 「'+s.b+'」'):''}. High contrast for readability, consistent series style across slides, no watermark, no logo, NO Japanese text.`;
 }
-function cardNewsTpl(t,aud){
-  const sol=(t.sol||[]).slice(0,6);const s=[];
+/* 어떤 주제든 결론은 "부동산 투자"로 귀결 · CTA 키워드 사용 */
+function cardNewsTpl(t,aud,kw){
+  kw=kw||'부동산';
+  const sol=(t.sol||[]).slice(0,5);const s=[];
   s.push({t:t.q,b:aud+' 필독 · 저장 필수'});
   s.push({t:t.label+', 지금 왜 중요할까',b:'모르면 손해입니다'});
   sol.forEach((x,i)=>s.push({t:(i+1)+'. '+x,b:''}));
-  s.push({t:'이것부터 확인하세요',b:t.label+' 전 필수 체크'});
-  while(s.length<9)s.push({t:'핵심 체크리스트',b:t.label+' 실행 포인트'});
-  s.length=9;
-  s.push({t:'댓글 「토지」 + 팔로우',b:'해결 가이드 PDF를 DM으로 드려요'});
+  while(s.length<7)s.push({t:'이것부터 확인하세요',b:t.label+' 필수 체크'});
+  s.length=7;
+  s.push({t:'주식·현금만으론 부족합니다',b:'변동성에 흔들리는 자산'});
+  s.push({t:'결국, 답은 부동산 투자',b:'실물 자산으로 리밸런싱'});
+  s.push({t:'댓글 「'+kw+'」 + 팔로우',b:'부동산 투자 가이드 PDF를 DM으로 드려요'});
   return s;
 }
 function cardPrev(c){
@@ -999,19 +999,20 @@ function cardPrev(c){
     (c.caption?('<div class="badge" style="margin-top:4px">캡션</div><div class="cutrow mut">'+esc(c.caption)+'</div>'):'');
 }
 function runCardTpl(id){
-  const n=state.nodes[id];const t=cardTopic(n);const aud=AUD[n.data.audience]||'일반';
-  n.data._card={hookQuestion:t.q,hookSub:aud+' 필독',cardNews:cardNewsTpl(t,aud),dmSolution:t.sol,
-    caption:t.q+'\n\n📩 팔로우 + 댓글 「토지」 → 해결 가이드 PDF DM\n#'+t.label.replace(/[()·]/g,'')+' #부동산 #토지 #재테크'};
-  renderBody(id);renderPrintCards(t.q,t.sol,'1/1');scheduleSave();toast('카드뉴스 10장(한글 자막) + DM 해결안 생성');
+  const n=state.nodes[id];const t=cardTopic(n);const aud=AUD[n.data.audience]||'일반';const kw=(n.data.keyword||'부동산').trim();
+  n.data._card={hookQuestion:t.q,hookSub:aud+' 필독',cardNews:cardNewsTpl(t,aud,kw),dmSolution:t.sol,
+    caption:t.q+'\n\n📩 팔로우 + 댓글 「'+kw+'」 → 부동산 투자 가이드 PDF DM\n#'+t.label.replace(/[()··\s]/g,'')+' #부동산투자 #자산리밸런싱 #노후준비'};
+  renderBody(id);renderPrintCards(t.q,t.sol,'1/1');scheduleSave();toast('카드뉴스 10장(→부동산 투자) 생성');
 }
 async function runCardAI(id){
-  const n=state.nodes[id];const t=cardTopic(n);const aud=AUD[n.data.audience]||'일반';
+  const n=state.nodes[id];const t=cardTopic(n);const aud=AUD[n.data.audience]||'일반';const kw=(n.data.keyword||'부동산').trim();
   const prompt=[
     '한국 부동산·금융 인스타 콘텐츠 마케터로서, 주제로 "카드뉴스 10장 + 팔로우·댓글 시 DM 해결안" 세트를 만들어줘.',
     '주제: '+t.label+' / 타깃: '+aud,
-    '- cardNews: 정확히 10장. 각 장 {t: 한글 헤드라인(짧고 강하게), b: 한글 보조문구, imagePrompt: 영어 이미지 프롬프트인데 반드시 그 카드에 t(및 b)의 한글 텍스트를 크고 정확히 렌더링하도록 지시하고 4:5 세로·시리즈 일관 스타일·주제별로 다양한 배경·no watermark·no Japanese 포함}.',
-    '  구성: 1장=훅 질문, 2~9장=문제·해법·체크·사례, 10장=댓글 「토지」 CTA.',
-    '- hookQuestion: 1장 훅 질문(한국어). dmSolution: DM 해결안 4~6단계(한국어, 과장·수익보장 금지, 필요시 전문가 상담). caption: 인스타 캡션(한국어, 댓글 「토지」 유도+해시태그).',
+    '★ 결론은 반드시 "부동산 투자"로 연결하라: 노후준비·미래준비·자산 리밸런싱·주식/현금 변동성 등 어떤 주제여도, 실물 부동산 투자가 해답이라는 결론으로 자연스럽게 귀결.',
+    '- cardNews: 정확히 10장. 각 장 {t: 한글 헤드라인, b: 한글 보조문구, imagePrompt: 영어 프롬프트인데 그 카드에 t(및 b) 한글 텍스트를 크고 정확히 렌더링 지시 + 4:5 세로 + 주제 내용에 맞는 서로 다른 배경/구도(매 장 다르게) + no watermark + no Japanese}.',
+    '  구성: 1장=훅 질문, 2~7장=문제·리밸런싱 논리, 8~9장=결국 부동산 투자 전환, 10장=댓글 「'+kw+'」 CTA.',
+    '- hookQuestion(한국어). dmSolution: 부동산 투자로 이어지는 해결안 4~6단계(과장·수익보장 금지). caption: 인스타 캡션(댓글 「'+kw+'」 유도+해시태그).',
     'JSON만 출력.'
   ].join('\n');
   toast('카드뉴스 10장 생성 중…');
@@ -1021,7 +1022,7 @@ async function runCardAI(id){
 }
 async function runCardImg(id){
   const n=state.nodes[id];const t=cardTopic(n);
-  let cn=(n.data._card&&n.data._card.cardNews);if(!cn||!cn.length)cn=cardNewsTpl(t,AUD[n.data.audience]||'일반');
+  let cn=(n.data._card&&n.data._card.cardNews);if(!cn||!cn.length)cn=cardNewsTpl(t,AUD[n.data.audience]||'일반',(n.data.keyword||'부동산').trim());
   const imgs=[];
   for(let i=0;i<cn.length;i++){toast('카드 이미지 '+(i+1)+'/'+cn.length+' 생성 중…');
     const pr=cn[i].imagePrompt||cardSlidePrompt(cn[i],t,i,cn.length);
