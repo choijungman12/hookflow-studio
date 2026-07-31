@@ -184,6 +184,19 @@ a{color:var(--accent2)}
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const LS='hookflow_canvas_v1';
 const CIRCLED=['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫'];
+const OUTFITS=[
+ {l:'테일러드 정장',v:'tailored power suit, elegant'},
+ {l:'실크 블라우스+와이드팬츠',v:'silk blouse with wide-leg trousers, chic'},
+ {l:'니트 원피스',v:'fitted knit dress, elegant flattering'},
+ {l:'트렌치코트 룩',v:'stylish trench coat over a dress'},
+ {l:'이브닝 드레스(우아)',v:'elegant evening dress, glamorous, tasteful'},
+ {l:'오피스 시크',v:'chic office look with blazer'},
+ {l:'애슬레저',v:'premium athleisure set, sporty chic'},
+ {l:'명품 캐주얼',v:'luxury casual, designer pieces'},
+ {l:'리조트 룩',v:'resort luxury outfit, elegant'},
+ {l:'모던 한복',v:'modern hanbok, elegant'}
+];
+const LOOKS=['우아 글래머','시크 모던','프로페셔널','캐주얼 시크','리조트'];
 const NT={
   project:{ic:'🎯',title:'프로젝트',in:false,out:true},
   master:{ic:'🧑‍🎤',title:'마스터 시트',in:true,out:true},
@@ -246,7 +259,7 @@ function addNode(type,x,y){
 }
 function defaultData(type){
   if(type==='project')return{topic:'',format:'9:16',cutCount:'12',style:'photoreal cinematic commercial',hook:'shock',slogan:'결국, 답은 땅',ctx:''};
-  if(type==='master')return{kind:'person',desc:'40대 신뢰감 있는 한국 여성 프리젠터',outfit:'단정한 정장, 골드 열쇠 펜던트'};
+  if(type==='master')return{kind:'person',desc:'40~50대 한국 여성 인플루언서, 세련되고 자신감 있는 분위기',look:'우아 글래머',outfit:'tailored power suit, elegant'};
   if(type==='conti')return{cuts:[]};
   if(type==='cutimg')return{};
   if(type==='export')return{tab:'sheet'};
@@ -302,17 +315,21 @@ function renderBody(id){
         <button data-v="1:1" class="${d.format==='1:1'?'on':''}">1:1</button></div></div>
       <div style="display:flex;gap:6px">
         <div style="flex:1"><label class="f">컷 수</label><select class="i" data-k="cutCount"><option ${d.cutCount==='12'?'selected':''}>12</option><option ${d.cutCount==='14'?'selected':''}>14</option><option ${d.cutCount==='16'?'selected':''}>16</option><option ${d.cutCount==='8'?'selected':''}>8</option><option ${d.cutCount==='4'?'selected':''}>4</option></select></div>
-        <div style="flex:2"><label class="f">비주얼 스타일</label><input class="i" data-k="style" value="${esc(d.style||'')}" placeholder="photoreal cinematic commercial / anime …"></div></div>
-      <div><label class="f">추가 컨텍스트 / 핵심 수치</label><textarea class="i" data-k="ctx" placeholder="예: 코스피 -35%, 서울 아파트 12억">${esc(d.ctx)}</textarea></div>
-      <div><label class="f">슬로건</label><input class="i" data-k="slogan" value="${esc(d.slogan)}"></div>`;
+        <div style="flex:2"><label class="f">비주얼 스타일 <button class="btn sm" data-run="proj-style" style="padding:0 6px;font-size:10px">✨추천</button></label><input class="i" data-k="style" value="${esc(d.style||'')}" placeholder="주제로 자동추천 가능"></div></div>
+      <div><label class="f">추가 컨텍스트 / 핵심 수치 <button class="btn sm" data-run="proj-ctx" style="padding:0 6px;font-size:10px">✨추천</button></label><textarea class="i" data-k="ctx" placeholder="예: 코스피 -35%, 서울 아파트 12억 (또는 ✨추천)">${esc(d.ctx)}</textarea></div>
+      <div><label class="f">슬로건 <button class="btn sm" data-run="proj-slogan" style="padding:0 6px;font-size:10px">✨생성</button></label><input class="i" data-k="slogan" value="${esc(d.slogan)}"></div>`;
   } else if(n.type==='master'){
     b.innerHTML=`
       <div><label class="f">종류</label><div class="seg" data-seg="kind">
         <button data-v="person" class="${d.kind==='person'?'on':''}">인물</button>
         <button data-v="product" class="${d.kind==='product'?'on':''}">제품</button></div></div>
+      ${d.kind==='person'?`<button class="btn sm" data-run="master-influencer">👩 인플루언서 40~50대 女 프리셋</button>`:''}
       <div><label class="f">설명</label><textarea class="i" data-k="desc" placeholder="인물/제품 묘사">${esc(d.desc)}</textarea></div>
+      ${d.kind==='person'?`<div style="display:flex;gap:6px">
+        <div style="flex:1"><label class="f">룩 / 무드</label><select class="i" data-k="look">${LOOKS.map(o=>`<option ${d.look===o?'selected':''}>${o}</option>`).join('')}</select></div>
+        <div style="flex:1"><label class="f">의상 프리셋</label><select class="i" data-outfit="1"><option value="">선택…</option>${OUTFITS.map(o=>`<option value="${esc(o.v)}">${esc(o.l)}</option>`).join('')}</select></div></div>`:''}
       <div><label class="f">의상 / 디자인</label><input class="i" data-k="outfit" value="${esc(d.outfit)}"></div>
-      <div class="tabs"><button class="btn sm p" data-run="master-prompt">📋 이미지 프롬프트</button><button class="btn sm" data-run="master">Worker로 생성</button></div>
+      <div class="tabs"><button class="btn sm p" data-run="master-prompt">📋 이미지 프롬프트</button><button class="btn sm" data-run="master">키/Worker로 생성</button></div>
       <div class="out"><textarea id="mp-${id}" readonly placeholder="프롬프트 생성 → 복사 → GenSpark/Nano Banana 등에 붙여 이미지 제작">${esc(d._prompt||'')}</textarea></div>
       <button class="btn sm" data-run="copy:mp-${id}">복사</button>
       <div id="prev-${id}">${d._img?imgTag(d._img):''}</div>`;
@@ -366,9 +383,9 @@ function renderBody(id){
         <button data-v="general" class="${d.audience==='general'?'on':''}">일반</button>
         <button data-v="newbie" class="${d.audience==='newbie'?'on':''}">사회초년생</button>
         <button data-v="retire" class="${d.audience==='retire'?'on':''}">은퇴자</button></div></div>
-      <div class="tabs"><button class="btn sm p" data-run="card-ai">🃏 AI 후킹+해결</button><button class="btn sm" data-run="card-tpl">템플릿</button></div>
-      <button class="btn sm" data-run="card-copyimg">📋 카드 이미지 프롬프트 복사</button>
-      <button class="btn sm" data-run="card-img">Worker로 이미지 생성</button>
+      <div class="tabs"><button class="btn sm p" data-run="card-ai">🃏 AI 카드뉴스10+해결</button><button class="btn sm" data-run="card-tpl">템플릿</button></div>
+      <button class="btn sm" data-run="card-copyimg">📋 카드뉴스 10장 프롬프트(한글자막)</button>
+      <button class="btn sm" data-run="card-img">키/Worker로 10장 이미지 생성</button>
       <button class="btn sm" onclick="window.print()">해결 PDF(인쇄)</button>
       <div id="prev-${id}">${cardPrev(d._card)}</div>`;
   }
@@ -390,6 +407,7 @@ function renderBody(id){
     renderBody(id);scheduleSave();toast('주제 선택: '+t);
   });
   b.querySelectorAll('select[data-ctpl]').forEach(sel=>sel.onchange=()=>loadCtpl(id,sel.value));
+  b.querySelectorAll('select[data-outfit]').forEach(sel=>sel.onchange=()=>{if(sel.value){n.data.outfit=sel.value;renderBody(id);scheduleSave();}});
 }
 function esc(s){return(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function imgTag(img){return `<div class="prev"><img src="data:${img.mimeType};base64,${img.data}"></div>`;}
@@ -457,11 +475,16 @@ const GBASE='https://generativelanguage.googleapis.com/v1beta/models/';
 async function api(path,body){
   const key=(state.settings.apiKey||'').trim();
   const base=(state.settings.worker||'').replace(/\/+$/,'');
-  // 방법 A: Gemini 키 직접(브라우저 CORS 허용 확인됨) — 텍스트/이미지/뉴스
-  if(key && (path==='/gemini/text'||path==='/gemini/image'||path==='/news')){
+  // 뉴스: 키 불필요. Worker 있으면 우선(서버측), 없으면 CORS 프록시 직접.
+  if(path==='/news'){
+    if(key){try{const g=await newsViaGemini(key,body&&body.q);if(g&&g.titles.length)return g;}catch(e){}}
+    if(base){try{const r=await fetch(base+'/news');const d=await r.json();if(d&&d.titles&&d.titles.length)return d;}catch(e){}}
+    return await newsDirect(body&&body.q);
+  }
+  // 방법 A: Gemini 키 직접(브라우저 CORS 허용 확인됨)
+  if(key && (path==='/gemini/text'||path==='/gemini/image')){
     if(path==='/gemini/text')return await geminiTextDirect(body,key);
     if(path==='/gemini/image')return await geminiImageDirect(body,key);
-    if(path==='/news')return await newsDirect();
   }
   // 방법 B: Worker
   if(base){
@@ -494,10 +517,39 @@ async function geminiImageDirect(body,key){
   if(!images.length)throw new Error('이미지가 반환되지 않았습니다 (프롬프트/모델 확인)');
   return {images};
 }
-async function newsDirect(){
-  const rss='https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko';
-  const proxies=[u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://api.codetabs.com/v1/proxy/?quest='+encodeURIComponent(u)];
-  for(const p of proxies){try{const r=await fetch(p(rss),{cache:'no-store'});if(!r.ok)continue;const t=await r.text();const titles=parseRssTitles(t);if(titles.length)return{titles};}catch(e){}}
+async function newsViaGemini(key,q){
+  const m=state.settings.tmodel||'gemini-flash-latest';
+  const ask=q?('오늘 한국에서 "'+q+'" 관련 최신 뉴스 헤드라인 10개'):'오늘 한국의 부동산·경제·정책·사회 주요 뉴스 헤드라인 10개';
+  const body={contents:[{role:'user',parts:[{text:ask+'만, 각 줄에 제목 하나씩, 번호·설명·따옴표 없이 제목만 출력.'}]}],tools:[{google_search:{}}]};
+  const r=await fetch(GBASE+m+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)return null;
+  const parts=((((d.candidates||[])[0]||{}).content)||{}).parts||[];
+  const text=parts.map(x=>x.text||'').join('');
+  const titles=text.split('\n').map(s=>s.replace(/^\s*\d+[\.\)]\s*/,'').replace(/^[-•·*]\s*/,'').replace(/^["'「]|["'」]$/g,'').trim()).filter(s=>s.length>4).slice(0,10);
+  return titles.length?{titles}:null;
+}
+async function newsDirect(q){
+  const sources=q
+    ?['https://news.google.com/rss/search?q='+encodeURIComponent(q+' when:2d')+'&hl=ko&gl=KR&ceid=KR:ko']
+    :['https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko',
+      'https://news.google.com/rss/search?q='+encodeURIComponent('부동산 OR 집값 OR 금리 OR 경제 when:1d')+'&hl=ko&gl=KR&ceid=KR:ko'];
+  const proxies=[
+    u=>({url:'https://api.allorigins.win/raw?url='+encodeURIComponent(u)}),
+    u=>({url:'https://api.codetabs.com/v1/proxy/?quest='+encodeURIComponent(u)}),
+    u=>({url:'https://api.allorigins.win/get?url='+encodeURIComponent(u),json:true}),
+    u=>({url:'https://corsproxy.io/?url='+encodeURIComponent(u)}),
+    u=>({url:'https://thingproxy.freeboard.io/fetch/'+u})
+  ];
+  for(const src of sources){
+    for(const mk of proxies){
+      try{
+        const sp=mk(src);const r=await fetch(sp.url,{cache:'no-store'});if(!r.ok)continue;
+        let t=await r.text();if(sp.json){try{t=JSON.parse(t).contents||'';}catch(e){}}
+        const titles=parseRssTitles(t);if(titles.length)return{titles};
+      }catch(e){}
+    }
+  }
   return{titles:[]};
 }
 function busy(id,on,label){const b=document.getElementById('prev-'+id)||document.getElementById('out-'+id);
@@ -509,6 +561,10 @@ async function runNode(id,act){
   try{
     if(act==='master')return await runMaster(id);
     if(act==='master-prompt')return runMasterPrompt(id);
+    if(act==='master-influencer')return runMasterInfluencer(id);
+    if(act==='proj-ctx')return await runProjField(id,'ctx');
+    if(act==='proj-slogan')return await runProjField(id,'slogan');
+    if(act==='proj-style')return await runProjField(id,'style');
     if(act==='cutimg-prompt')return runCutImgPrompt(id);
     if(act==='card-copyimg')return runCardCopyImg(id);
     if(act==='conti-ai')return await runContiAI(id);
@@ -531,12 +587,35 @@ async function runNode(id,act){
 
 function masterImgPrompt(n,ctx){
   const proj=(ctx&&ctx.proj)||{};const isP=n.data.kind==='person';
+  const LK={'우아 글래머':'elegant glamorous, confident, well-groomed, fashionable, flattering silhouette','시크 모던':'chic modern, sleek, confident','프로페셔널':'professional, polished, authoritative','캐주얼 시크':'casual chic, effortless','리조트':'resort luxury, relaxed elegant'};
+  const look=LK[n.data.look]||n.data.look||'elegant, confident';
   return (isP
-    ? `Character reference sheet on a light cream background, labeled panels 정면/3-4/측면/전신/표정. Same identity in every panel. Character: ${n.data.desc}. Outfit: ${n.data.outfit}. Fully clothed, classy, broadcast-safe.`
+    ? `Character reference sheet on a light cream background, labeled panels 정면/3-4/측면/전신/표정. Same identity in every panel. Character: ${n.data.desc}, ${look}. Outfit: ${n.data.outfit}. Fully clothed, classy, tasteful, broadcast-safe.`
     : `Product reference sheet on light background: HERO / 360 (front-side-back) / DETAIL macro. Product: ${n.data.desc}. Design: ${n.data.outfit}. No real brand logos.`)
     +` Photoreal cinematic. Korean labels only, NO Japanese text, no watermark. Format hint ${proj.aspect||'9:16'}.`;
 }
 function runMasterPrompt(id){const n=state.nodes[id];n.data._prompt=masterImgPrompt(n,incoming(id));renderBody(id);scheduleSave();copyStr(n.data._prompt);toast('마스터 이미지 프롬프트 생성·복사 · GenSpark/Nano Banana에 붙여넣기');}
+function runMasterInfluencer(id){const n=state.nodes[id];n.data.kind='person';n.data.desc='40~50대 한국 여성 인플루언서, 세련되고 자신감 있는 글래머러스한 분위기, 관리된 몸매, 화려하고 감각적인 스타일';n.data.look='우아 글래머';if(!n.data.outfit)n.data.outfit='tailored power suit, elegant';renderBody(id);scheduleSave();toast('인플루언서 프리셋 적용 (우아·글래머러스, 방송안전)');}
+async function runProjField(id,kind){
+  const n=state.nodes[id];const topic=(n.data.topic||'').trim();
+  if(!topic){toast('먼저 주제를 입력하세요');return;}
+  const connected=!!(state.settings.apiKey||state.settings.worker);
+  if(connected){
+    const P={
+      ctx:`한국 부동산(토지) 영상 주제 "${topic}"의 후킹용 핵심 수치·사실·사례를 한국어 한 줄로(쉼표 구분, 40자 내외). 과장·수익보장·특정종목 금지. 값만 출력.`,
+      slogan:`주제 "${topic}"에 어울리는 한국어 부동산 브랜드 슬로건 1개만 아주 짧게(12자 내외). 값만 출력.`,
+      style:`주제 "${topic}"에 맞는 영상 비주얼 스타일을 영어 1줄로(예 photoreal cinematic commercial, warm golden grade, shallow DoF, anamorphic). 값만 출력.`
+    };
+    toast('AI 추천 생성 중…');
+    try{const d=await api('/gemini/text',{prompt:P[kind]});let v=(d.text||'').trim().replace(/^["'「\[]+|["'」\]]+$/g,'').split('\n')[0].trim();
+      if(v){n.data[kind]=v;renderBody(id);scheduleSave();toast('✨ '+ (kind==='ctx'?'컨텍스트':kind==='slogan'?'슬로건':'스타일') +' 생성 완료');}else toast('빈 응답 · 다시 시도');
+      return;
+    }catch(e){if(String(e.message)!=='NO_WORKER'){toast('오류: '+e.message);return;}}
+  }
+  if(kind==='ctx'){toast('AI 미연결 · ⚙설정에서 Gemini 키 연결 시 컨텍스트 자동추천');return;}
+  n.data[kind]=kind==='slogan'?'결국, 답은 땅':'photoreal cinematic commercial, warm golden grade, shallow depth of field';
+  renderBody(id);scheduleSave();toast('키 미연결 → 기본값 채움(⚙설정에서 AI 연결 시 맞춤 추천)');
+}
 async function runMaster(id){
   const n=state.nodes[id];const prompt=masterImgPrompt(n,incoming(id));
   toast('마스터 이미지 생성 중… (수초~십수초)');
@@ -558,9 +637,11 @@ function runCutImgPrompt(id){
   toast('컷 이미지 프롬프트 생성·복사 · 이미지 제작 후 힉스필드/Seedance에 넣어 영상화');
 }
 function runCardCopyImg(id){
-  const n=state.nodes[id];const c=n.data._card;const t=cardTopic(n);
-  const pr=(c&&c.cardImagePrompt)||('Instagram hook card background, '+t.label+', curiosity-provoking, clean editorial, leave top area empty for a big Korean headline, no text baked in, no watermark, photoreal cinematic.');
-  copyStr(pr);toast('카드 이미지 프롬프트 복사 · 이미지 사이트에 붙여넣기');
+  const n=state.nodes[id];const t=cardTopic(n);
+  let cn=(n.data._card&&n.data._card.cardNews);if(!cn||!cn.length)cn=cardNewsTpl(t,AUD[n.data.audience]||'일반');
+  const txt='■ '+t.label+' 카드뉴스 '+cn.length+'장 (한글 자막 포함 · 나노바나나/GPT 이미지에 장별로 붙여넣기)\n\n'+
+    cn.map((s,i)=>('── 카드 '+(i+1)+'/'+cn.length+' ──\n'+(s.imagePrompt||cardSlidePrompt(s,t,i,cn.length)))).join('\n\n');
+  copyStr(txt);toast('카드뉴스 '+cn.length+'장 프롬프트 복사(한글 자막)');
 }
 
 const CONTI_SCHEMA={type:'object',properties:{cuts:{type:'array',items:{type:'object',properties:{
@@ -581,6 +662,7 @@ async function runContiAI(id){
     '각 컷은 실제 제작용으로 매우 상세하게 채워라:',
     `- imagePrompt: 나노바나나/GPT 이미지에 그대로 붙여넣을 영어 이미지 프롬프트. 반드시 [피사체·상황] + [샷사이즈·카메라 앵글] + [렌즈(24/35/50/85mm 또는 100mm macro)] + [조명·시간대] + [색보정/무드] + [스타일: ${style}] + [디테일]을 모두 포함해 아주 구체적으로. ${asp} frame. 한글 텍스트 굽지 말 것. no watermark, no Japanese text, no real brand/logo.`,
     '- action: 한국어 동작/역할. camera: 영어 카메라 앵글+무빙. dialogue: 한국어 화면 자막. narration: 한국어 성우 VO(자연스러운 구어체). pron: 숫자/한자어/영어 읽는 법(예 3억→삼억, ROI→아르오아이). grade: 컬러그레이드. bgm: 배경음악 무드(한국어). sfx: 효과음(한국어). motion: 이 이미지를 힉스필드/Seedance로 영상화할 때의 카메라 무빙(영어). durationSec: 컷당 2~4초.',
+    '★ 다양성 필수: 모든 컷이 서로 다른 샷사이즈(익스트림 클로즈업/미디엄/와이드/항공/매크로), 앵글(로우/하이/더치/OTS/POV/탑다운), 배경·로케이션, 조명, VFX(파티클/글리치/광선/보케/이중노출/타임랩스/렌즈플레어 등)를 갖도록 매 컷을 확연히 다르게. 비슷한 컷 반복 절대 금지. 주제 '+proj.topic+'에 맞는 구체적 배경·소품을 매 컷 다르게 사용.',
     '규칙: 일본어·실제 종목/브랜드 금지, 수익보장·과장 표현 금지, 방송 안전.',
     `총 ${n}컷. JSON만 출력.`
   ].filter(Boolean).join('\n');
@@ -594,7 +676,11 @@ async function runContiAI(id){
 function buildRichCuts(proj){
   const T=proj.topic||'이 주제',ASP=proj.aspect||'9:16',CX=proj.ctx||'',STYLE=proj.style||'photoreal cinematic commercial';
   const n=Math.max(4,Math.min(16,+(proj.cutCount||12)));
-  const P=s=>s+` ${ASP} frame, ${STYLE}, filmic, high detail. No on-screen text, no watermark, NO Japanese text, no real brand/logo.`;
+  const VFX=['volumetric light rays','floating dust particles','subtle lens flare','creamy bokeh','anamorphic flare','soft atmospheric haze','gentle light leaks','fine film grain','wet reflections','depth fog'];
+  const ANG=['low-angle','high-angle','dutch-tilt','over-the-shoulder','eye-level','top-down aerial','wide establishing','extreme close-up','profile silhouette'];
+  const rnd=a=>a[Math.floor(Math.random()*a.length)];
+  // 컷마다 앵글·VFX를 랜덤 주입 → 배경·구도 다양화(재생성마다 달라짐)
+  const P=s=>s+`, ${rnd(ANG)} composition, ${rnd(VFX)}, ${ASP} frame, ${STYLE}, filmic, high detail. Distinct varied shot. No on-screen text, no watermark, NO Japanese text, no real brand/logo.`;
   const C=[
    {action:'충격 훅',character:true,dur:'2',grade:'cold desaturated blue',bgm:'저음 긴장 드론, 심박 비트',sfx:'충격 스팅어',camera:'slow push-in, 85mm shallow DoF',motion:'slow dolly-in on the face',
     imagePrompt:P(`Extreme close-up of an anxious Korean person's face lit only by cold blue screen glow in a dark room, reacting to bad news about ${T}, 85mm lens, low-key chiaroscuro lighting, desaturated cool-blue grade, tense mood, shallow depth of field.`),
@@ -821,13 +907,12 @@ function trendsList(titles,id){
   return titles.map((t,i)=>`<button class="btn sm" style="text-align:left;width:100%;margin-bottom:3px" data-pick="${i}">${i+1}. ${esc(t)}</button>`).join('');
 }
 async function runTrends(id){
-  const d=await api('/news',{});const node=state.nodes[id];node.data.titles=d.titles||[];renderBody(id);
-  // wire pick buttons
-  const b=document.getElementById('body-'+id);b&&b.querySelectorAll('[data-pick]').forEach(btn=>btn.onclick=()=>{
-    const t=node.data.titles[+btn.dataset.pick];node.data.picked=t;node.data._proj={topic:t,aspect:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:''};renderBody(id);wirePicks(id);scheduleSave();toast('주제 선택: '+t);});
-  scheduleSave();toast('뉴스 '+node.data.titles.length+'건');
+  toast('오늘의 뉴스 불러오는 중…');
+  let d;try{d=await api('/news',{});}catch(e){d={titles:[]};}
+  const node=state.nodes[id];node.data.titles=(d&&d.titles)||[];renderBody(id);scheduleSave();
+  if(node.data.titles.length)toast('오늘의 뉴스 '+node.data.titles.length+'건 · 헤드라인 클릭→주제');
+  else{runTrendsPrompt(id);toast('라이브 실패 → "Top10 프롬프트"를 복사했어요. GenSpark/Gemini에 붙여 오늘 이슈 받기 (또는 ⚙설정에 Gemini 키 연결 시 자동)');}
 }
-function wirePicks(id){const node=state.nodes[id];const b=document.getElementById('body-'+id);b&&b.querySelectorAll('[data-pick]').forEach(btn=>btn.onclick=()=>{const t=node.data.titles[+btn.dataset.pick];node.data.picked=t;node.data._proj={topic:t,aspect:'9:16',hook:'shock',slogan:'결국, 답은 땅',ctx:''};renderBody(id);wirePicks(id);scheduleSave();toast('주제 선택: '+t);});}
 function runTrendsPrompt(id){
   const dt=new Date();const ds=dt.getFullYear()+'.'+(dt.getMonth()+1)+'.'+dt.getDate();
   copyStr('오늘('+ds+') 한국 부동산·경제·정책 이슈 Top 10을 최신 뉴스에서 뽑아 [순위] 제목 — 요약 — 토지 연결 앵글 — 훅 문구 형식으로. 과장·수익보장 표현 금지.');
@@ -884,47 +969,66 @@ const RE_TOPICS=[
   {id:'cafe',label:'무인카페',q:'무인카페, 진짜 남을까? 수익 구조 해부',sol:['입지·상권 분석','초기 투자·장비','운영비·마진','무인 운영 리스크','손익분기 계산']},
   {id:'policy_tax',label:'부동산 세법·정책',q:'바뀐 부동산 세법, 뭐가 달라졌나',sol:['취득·보유·양도세 흐름','최신 규제 요약','절세 원칙','상황별 전략','전문가 상담 시점']}
 ];
-const CARD_SCHEMA={type:'object',properties:{hookQuestion:{type:'string'},hookSub:{type:'string'},cardImagePrompt:{type:'string'},dmSolution:{type:'array',items:{type:'string'}},caption:{type:'string'}},required:['hookQuestion','dmSolution','cardImagePrompt']};
+const CARD_SCHEMA={type:'object',properties:{
+  hookQuestion:{type:'string'},dmSolution:{type:'array',items:{type:'string'}},caption:{type:'string'},
+  cardNews:{type:'array',items:{type:'object',properties:{t:{type:'string'},b:{type:'string'},imagePrompt:{type:'string'}},required:['t','imagePrompt']}}
+},required:['hookQuestion','dmSolution','cardNews']};
 const AUD={general:'일반',newbie:'사회초년생',retire:'은퇴자'};
+function cardTopic(n){return RE_TOPICS.find(t=>t.id===n.data.topic)||RE_TOPICS[0];}
+function cardSlidePrompt(s,t,i,n){
+  return `Instagram card-news slide ${i+1}/${n}, 4:5 vertical, theme "${t.label}" (Korean real-estate & finance). Modern clean Korean editorial card design with a tasteful, topic-specific background photo/illustration about ${t.label} (vary the visual each slide). Render this EXACT Korean text large, bold and perfectly legible on the card — HEADLINE: 「${s.t}」${s.b?(' , SUBTEXT: 「'+s.b+'」'):''}. High contrast for readability, consistent series style across slides, no watermark, no logo, NO Japanese text.`;
+}
+function cardNewsTpl(t,aud){
+  const sol=(t.sol||[]).slice(0,6);const s=[];
+  s.push({t:t.q,b:aud+' 필독 · 저장 필수'});
+  s.push({t:t.label+', 지금 왜 중요할까',b:'모르면 손해입니다'});
+  sol.forEach((x,i)=>s.push({t:(i+1)+'. '+x,b:''}));
+  s.push({t:'이것부터 확인하세요',b:t.label+' 전 필수 체크'});
+  while(s.length<9)s.push({t:'핵심 체크리스트',b:t.label+' 실행 포인트'});
+  s.length=9;
+  s.push({t:'댓글 「토지」 + 팔로우',b:'해결 가이드 PDF를 DM으로 드려요'});
+  return s;
+}
 function cardPrev(c){
   if(!c)return'<div class="badge">미생성</div>';
+  const cn=c.cardNews||[];
   return (c.image?imgTag(c.image):'')+
-    '<div class="cutrow"><b>❓ '+esc(c.hookQuestion||'')+'</b></div>'+(c.hookSub?('<div class="cutrow mut">'+esc(c.hookSub)+'</div>'):'')+
-    '<div class="badge ok" style="margin:4px 0">DM 해결안</div>'+
+    (cn.length?'<div class="badge ok" style="margin:2px 0">카드뉴스 '+cn.length+'장 · 한글 자막</div>'+cn.slice(0,5).map((s,i)=>'<div class="cutrow"><b>'+(i+1)+'</b> '+esc(s.t)+'</div>').join('')+(cn.length>5?'<div class="cutrow mut">… 외 '+(cn.length-5)+'장</div>':''):'')+
+    '<div class="badge" style="margin:4px 0">DM 해결안</div>'+
     (c.dmSolution||[]).map((s,i)=>'<div class="cutrow">'+(i+1)+'. '+esc(s)+'</div>').join('')+
     (c.caption?('<div class="badge" style="margin-top:4px">캡션</div><div class="cutrow mut">'+esc(c.caption)+'</div>'):'');
 }
-function cardTopic(n){return RE_TOPICS.find(t=>t.id===n.data.topic)||RE_TOPICS[0];}
 function runCardTpl(id){
   const n=state.nodes[id];const t=cardTopic(n);const aud=AUD[n.data.audience]||'일반';
-  const card={hookQuestion:t.q,hookSub:aud+' 필독 · 저장하세요',
-    cardImagePrompt:`Instagram hook card background, ${t.label} theme, Korean real-estate finance, curiosity-provoking, clean editorial, space for a big Korean headline (leave upper area empty for text overlay). No text baked in, no watermark, photoreal cinematic.`,
-    dmSolution:t.sol,
-    caption:t.q+'\n\n📩 더 궁금하면? 팔로우 + 댓글 「토지」 → 해결 가이드 DM\n#'+t.label.replace(/[()·]/g,'')+' #부동산 #재테크 #토지'};
-  n.data._card=card;renderBody(id);renderPrintCards(t.q,t.sol,'9/16');scheduleSave();toast('템플릿 후킹 카드 생성');
+  n.data._card={hookQuestion:t.q,hookSub:aud+' 필독',cardNews:cardNewsTpl(t,aud),dmSolution:t.sol,
+    caption:t.q+'\n\n📩 팔로우 + 댓글 「토지」 → 해결 가이드 PDF DM\n#'+t.label.replace(/[()·]/g,'')+' #부동산 #토지 #재테크'};
+  renderBody(id);renderPrintCards(t.q,t.sol,'1/1');scheduleSave();toast('카드뉴스 10장(한글 자막) + DM 해결안 생성');
 }
 async function runCardAI(id){
   const n=state.nodes[id];const t=cardTopic(n);const aud=AUD[n.data.audience]||'일반';
   const prompt=[
-    '한국 부동산·금융 콘텐츠 마케터로서, 아래 주제로 인스타 "후킹 카드 → 팔로우·댓글 시 DM 해결안" 세트를 만들어줘.',
+    '한국 부동산·금융 인스타 콘텐츠 마케터로서, 주제로 "카드뉴스 10장 + 팔로우·댓글 시 DM 해결안" 세트를 만들어줘.',
     '주제: '+t.label+' / 타깃: '+aud,
-    '- hookQuestion: 궁금증을 강하게 유발하는 한국어 한 줄 질문',
-    '- hookSub: 보조 후킹 문구(한국어)',
-    '- cardImagePrompt: 카드 배경 이미지 영어 프롬프트(한글 텍스트는 굽지 말고 상단 여백 비우기, no watermark)',
-    '- dmSolution: DM으로 보낼 해결안 4~6단계(한국어, 실행 체크리스트, 수익보장·과장 금지, 필요시 전문가 상담 안내)',
-    '- caption: 인스타 캡션(한국어, 댓글 「토지」 유도 + 해시태그)',
+    '- cardNews: 정확히 10장. 각 장 {t: 한글 헤드라인(짧고 강하게), b: 한글 보조문구, imagePrompt: 영어 이미지 프롬프트인데 반드시 그 카드에 t(및 b)의 한글 텍스트를 크고 정확히 렌더링하도록 지시하고 4:5 세로·시리즈 일관 스타일·주제별로 다양한 배경·no watermark·no Japanese 포함}.',
+    '  구성: 1장=훅 질문, 2~9장=문제·해법·체크·사례, 10장=댓글 「토지」 CTA.',
+    '- hookQuestion: 1장 훅 질문(한국어). dmSolution: DM 해결안 4~6단계(한국어, 과장·수익보장 금지, 필요시 전문가 상담). caption: 인스타 캡션(한국어, 댓글 「토지」 유도+해시태그).',
     'JSON만 출력.'
   ].join('\n');
-  toast('AI 후킹+해결 생성 중…');
+  toast('카드뉴스 10장 생성 중…');
   const d=await api('/gemini/text',{prompt,schema:CARD_SCHEMA,model:state.settings.tmodel});
   let o;try{o=JSON.parse(d.text);}catch(e){throw new Error('카드 JSON 파싱 실패');}
-  n.data._card=Object.assign({},n.data._card,o);renderBody(id);renderPrintCards(o.hookQuestion||t.q,o.dmSolution||t.sol,'9/16');scheduleSave();toast('AI 후킹 카드 생성 완료');
+  n.data._card=Object.assign({},n.data._card,o);renderBody(id);renderPrintCards(o.hookQuestion||t.q,o.dmSolution||t.sol,'1/1');scheduleSave();toast('AI 카드뉴스 10장 생성 완료');
 }
 async function runCardImg(id){
-  const n=state.nodes[id];const t=cardTopic(n);const pr=(n.data._card&&n.data._card.cardImagePrompt)||('Instagram hook card background, '+t.label+', curiosity, clean editorial, leave top empty for headline, no text, no watermark, photoreal.');
-  toast('후킹 카드 이미지 생성 중…');
-  const d=await api('/gemini/image',{prompt:pr,model:state.settings.imodel});
-  n.data._card=Object.assign({hookQuestion:t.q,dmSolution:t.sol},n.data._card,{image:d.images[0]});renderBody(id);scheduleSave();toast('후킹 카드 이미지 완료');
+  const n=state.nodes[id];const t=cardTopic(n);
+  let cn=(n.data._card&&n.data._card.cardNews);if(!cn||!cn.length)cn=cardNewsTpl(t,AUD[n.data.audience]||'일반');
+  const imgs=[];
+  for(let i=0;i<cn.length;i++){toast('카드 이미지 '+(i+1)+'/'+cn.length+' 생성 중…');
+    const pr=cn[i].imagePrompt||cardSlidePrompt(cn[i],t,i,cn.length);
+    try{const d=await api('/gemini/image',{prompt:pr,model:state.settings.imodel});imgs[i]=d.images[0];}
+    catch(e){if(String(e.message)==='NO_WORKER'){throw e;}imgs[i]=null;}
+  }
+  n.data._card=Object.assign({hookQuestion:t.q,dmSolution:t.sol,cardNews:cn},n.data._card,{cardImages:imgs,image:imgs.find(Boolean)||null});renderBody(id);scheduleSave();toast('카드뉴스 이미지 생성 완료');
 }
 
 /* ---------- starter ---------- */
