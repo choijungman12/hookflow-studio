@@ -611,7 +611,7 @@ async function runProjField(id,kind){
     const P={
       ctx:`한국 부동산(토지) 영상 주제 "${topic}"의 후킹용 핵심 수치·사실·사례를 한국어 한 줄로(쉼표 구분, 40자 내외). 과장·수익보장·특정종목 금지. 값만 출력.`,
       slogan:`주제 "${topic}"에 어울리는 한국어 부동산 브랜드 슬로건 1개만 아주 짧게(12자 내외). 값만 출력.`,
-      style:`주제 "${topic}"에 맞는 영상 비주얼 스타일을 영어 1줄로(예 photoreal cinematic commercial, warm golden grade, shallow DoF, anamorphic). 값만 출력.`
+      style:`영상의 "룩/그레이드"만 영어 1줄로. 카메라 앵글·샷·드론·항공·피사체·장면 묘사는 절대 포함하지 말고 색감·질감·필름룩만(예: photoreal cinematic commercial, warm golden grade, shallow depth of field, film grain). 값만 출력.`
     };
     toast('AI 추천 생성 중…');
     try{const d=await api('/gemini/text',{prompt:P[kind]});let v=(d.text||'').trim().replace(/^["'「\[]+|["'」\]]+$/g,'').split('\n')[0].trim();
@@ -669,7 +669,8 @@ async function runContiAI(id){
     '각 컷은 실제 제작용으로 매우 상세하게 채워라:',
     `- imagePrompt: 나노바나나/GPT 이미지에 그대로 붙여넣을 영어 이미지 프롬프트. 반드시 [피사체·상황] + [샷사이즈·카메라 앵글] + [렌즈(24/35/50/85mm 또는 100mm macro)] + [조명·시간대] + [색보정/무드] + [스타일: ${style}] + [디테일]을 모두 포함해 아주 구체적으로. ${asp} frame. 한글 텍스트 굽지 말 것. no watermark, no Japanese text, no real brand/logo.`,
     '- action: 한국어 동작/역할. camera: 영어 카메라 앵글+무빙. dialogue: 한국어 화면 자막. narration: 한국어 성우 VO(자연스러운 구어체). pron: 숫자/한자어/영어 읽는 법(예 3억→삼억, ROI→아르오아이). grade: 컬러그레이드. bgm: 배경음악 무드(한국어). sfx: 효과음(한국어). motion: 이 이미지를 힉스필드/Seedance로 영상화할 때의 카메라 무빙(영어). durationSec: 컷당 2~4초.',
-    '★ 다양성 필수: 모든 컷이 서로 다른 샷사이즈(익스트림 클로즈업/미디엄/와이드/항공/매크로), 앵글(로우/하이/더치/OTS/POV/탑다운), 배경·로케이션, 조명, VFX(파티클/글리치/광선/보케/이중노출/타임랩스/렌즈플레어 등)를 갖도록 매 컷을 확연히 다르게. 비슷한 컷 반복 절대 금지. 주제 '+proj.topic+'에 맞는 구체적 배경·소품을 매 컷 다르게 사용.',
+    '★ 스타일('+style+')은 색감/룩에만 적용하고, 컷마다 장면·배경·구도·샷사이즈·앵글·VFX를 확연히 다르게(드론/항공 같은 카메라를 모든 컷에 반복 금지). 비슷한 컷 절대 반복 금지. 주제 '+proj.topic+'에 맞는 구체적 배경·소품·상황을 매 컷 다르게.',
+    '★ 리포터/데이터형: 주제가 정책·세금·통계 등이면 "리포터가 카메라에 설명하는 컷"과 "현행 vs 개정을 예시 수치로 비교하는 인포그래픽 인서트"를 반드시 포함(실제 종목/브랜드 금지).',
     '규칙: 일본어·실제 종목/브랜드 금지, 수익보장·과장 표현 금지, 방송 안전.',
     `총 ${n}컷. JSON만 출력.`
   ].filter(Boolean).join('\n');
@@ -686,8 +687,9 @@ function buildRichCuts(proj){
   const VFX=['volumetric light rays','floating dust particles','subtle lens flare','creamy bokeh','anamorphic flare','soft atmospheric haze','gentle light leaks','fine film grain','wet reflections','depth fog'];
   const ANG=['low-angle','high-angle','dutch-tilt','over-the-shoulder','eye-level','top-down aerial','wide establishing','extreme close-up','profile silhouette'];
   const rnd=a=>a[Math.floor(Math.random()*a.length)];
-  // 컷마다 앵글·VFX를 랜덤 주입 → 배경·구도 다양화(재생성마다 달라짐)
-  const P=s=>s+`, ${rnd(ANG)} composition, ${rnd(VFX)}, ${ASP} frame, ${STYLE}, filmic, high detail. Distinct varied shot. No on-screen text, no watermark, NO Japanese text, no real brand/logo.`;
+  // style은 '룩/그레이드'만 사용(장면·드론·항공 등은 제거) → 컷마다 고유 장면이 살아남게
+  const LOOK=(STYLE.split(/[,;]/).map(x=>x.trim()).filter(x=>x&&/(cinematic|photoreal|commercial|editorial|premium|grade|grain|bokeh|anamorphic|warm|cool|golden|moody|dramatic|soft|hdr|sharp|detail|filmic|film|matte|vivid|muted|natural|realistic|4k|8k)/i.test(x)&&!/shot|aerial|drone|angle|close-?up|establishing|top-?down|view of|of .*(development|city|urban)/i.test(x)).join(', '))||'photoreal cinematic commercial';
+  const P=s=>s+`, ${rnd(ANG)} angle, ${rnd(VFX)}, ${ASP} frame, ${LOOK}, high detail. No on-screen text, no watermark, NO Japanese text, no real brand/logo.`;
   const KW=(proj.keyword||'부동산');
   const pick=(arr,k)=>{const c=arr.slice(),o=[];while(o.length<k&&c.length)o.push(c.splice(Math.floor(Math.random()*c.length),1)[0]);return o;};
   // 문제 씬(주제 반영) 풀 — 매 생성마다 다르게
@@ -722,8 +724,12 @@ function buildRichCuts(proj){
   cuts.push({action:'충격 훅',character:false,dur:'2',grade:'cold desaturated',bgm:'저음 긴장 드론, 심박',sfx:'충격 스팅어',camera:'push-in',motion:'slow dolly-in',imagePrompt:P(probScenes[0]||PROB[0]),dialogue:'「'+T+', 남 얘기 같으세요?」',narration:T+', 남의 이야기 같으신가요?',pron:''});
   cuts.push({action:'문제 심화',character:false,dur:'3',grade:'cold grey',bgm:'점증 불안',sfx:'긴장음',camera:'insert',motion:'slow push',imagePrompt:P(probScenes[1]||PROB[1]),dialogue:CX?('「'+CX+'」'):'「문제는 점점 커집니다」',narration:CX?(CX.replace(/\?+$/,'')+'.'):'내버려 두면 문제는 점점 커집니다.',pron:''});
   if(n>=6)cuts.push({action:'문제 심화2',character:false,dur:'2',grade:'cold',bgm:'긴장',sfx:'저음 럼블',camera:'insert',motion:'slow track',imagePrompt:P(probScenes[2]||rnd(PROB)),dialogue:'「지금도 벌어지고 있죠」',narration:'지금 이 순간에도 벌어지고 있습니다.',pron:''});
+  if(n>=8){
+    cuts.push({action:'데이터 비교 인서트',character:false,dur:'3',grade:'clean editorial',bgm:'신뢰감 있는 비트',sfx:'그래프 팝',camera:'clean insert',motion:'numbers count-up',imagePrompt:P(`editorial split-screen BEFORE vs AFTER comparison infographic about "${T}"${CX?(' ('+CX+')'):''}, Korean-style clean data cards with example figures, arrows and highlight numbers, no real tickers`),dialogue:'「숫자로 보면 이렇습니다」',narration:'숫자로 보면 차이가 분명합니다.',pron:''});
+    cuts.push({action:'리포터 설명',character:true,dur:'3',grade:'newsroom warm',bgm:'차분한 리포트',sfx:'차분한 룸톤 앰비언스',camera:'medium, presenter to camera',motion:'slow push-in',imagePrompt:P(`a trustworthy Korean reporter-presenter explaining "${T}" to camera on a clean set, subtle on-set data graphics behind, medium shot. Keep identity consistent with the attached master sheet`),dialogue:'「핵심만 짚어드릴게요」',narration:'핵심만 짚어드리겠습니다.',pron:''});
+  }
   cuts.push({action:'전환 — 부동산으로',character:true,dur:'2',grade:'cool→warm',bgm:'전환 스웰',sfx:'빛 번짐 whoosh',camera:'profile turn, rack focus',motion:'rack focus + pan to warm light',imagePrompt:P('a Korean presenter turning from a cold scene toward warm light revealing Korean real-estate/property, hopeful cool-to-warm transition. Keep identity consistent with the attached master sheet'),dialogue:'「하지만, 답은 부동산입니다」',narration:'하지만 답은 늘 같았습니다. 실물 자산, 부동산.',pron:''});
-  solScenes.forEach((sc,i)=>{const gl=['warm golden hour','golden dusk','warm daylight','warm cinematic'][i%4];const ln=solLines[i%solLines.length];cuts.push({action:'부동산 해법 '+(i+1),character:false,dur:'3',grade:gl,bgm:'따뜻한 상승',sfx:i%2?'도시 앰비언스':'바람',camera:['wide low-angle','crane up','aerial','macro'][i%4],motion:['slow rise','crane up','slow push','slow zoom'][i%4],imagePrompt:P(sc),dialogue:ln[0],narration:ln[1],pron:''});});
+  solScenes.forEach((sc,i)=>{const gl=['warm golden hour','golden dusk','warm daylight','warm cinematic'][i%4];const ln=solLines[i%solLines.length];cuts.push({action:'부동산 해법 '+(i+1),character:false,dur:'3',grade:gl,bgm:'따뜻한 상승',sfx:i%2?'도시 앰비언스':'바람',camera:['wide low-angle','crane up','aerial','macro'][i%4],motion:['slow rise','crane up','slow push','slow zoom'][i%4],imagePrompt:P(sc+', framed as the real-estate answer to '+T),dialogue:ln[0],narration:ln[1],pron:''});});
   if(cuts.length<n-1)cuts.push({action:'확신(프리젠터)',character:true,dur:'2',grade:'warm bokeh',bgm:'따뜻한 여운',sfx:'상승음',camera:'medium close-up, 85mm',motion:'slow push-in',imagePrompt:P('a trustworthy Korean presenter smiling with quiet confidence, warm city bokeh, premium editorial. Keep identity consistent with the attached master sheet'),dialogue:'「'+T+', 결국 답은 부동산입니다」',narration:'결국, 답은 부동산 투자입니다.',pron:''});
   while(cuts.length>n-1)cuts.pop();
   while(cuts.length<n-1)cuts.push({action:'부동산 인서트',character:false,dur:'2',grade:'warm',bgm:'상승',sfx:'키 사운드',camera:'insert',motion:'slow rise',imagePrompt:P(rnd(SOL)),dialogue:'「지금이 시작입니다」',narration:'시작은, 바로 지금입니다.',pron:''});
