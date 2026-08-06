@@ -337,10 +337,13 @@ function renderBody(id){
       <div id="prev-${id}">${d._img?imgTag(d._img):''}</div>`;
   } else if(n.type==='conti'){
     b.innerHTML=`
-      <div class="tabs"><button class="btn sm p" data-run="conti-ai">🎬 AI 콘티 생성</button><button class="btn sm" data-run="conti-tpl">상세 템플릿</button></div>
-      <div style="display:flex;gap:5px">
-        <select class="i" data-ctpl="1"><option value="">저장된 템플릿…</option>${ctplOptions()}</select>
+      <div class="tabs"><button class="btn sm p" data-run="conti-ai">🎬 AI 콘티(스토리)</button><button class="btn sm" data-run="conti-tpl">상세 템플릿</button></div>
+      <div class="tabs"><button class="btn sm" data-run="conti-copyprompt">📋 AI 콘티 프롬프트</button>
+        <select class="i" data-ctpl="1" style="max-width:120px"><option value="">저장 템플릿…</option>${ctplOptions()}</select>
         <button class="btn sm" data-run="ctpl-save" title="현재 콘티를 내 템플릿으로 저장">💾</button></div>
+      <textarea class="i" id="cj-${id}" placeholder="키 없이: 위 프롬프트를 GenSpark/Gemini에 붙여 받은 JSON을 여기 붙여넣기" style="min-height:52px"></textarea>
+      <button class="btn sm" data-run="conti-paste">붙여넣기 적용</button>
+      <div class="badge">자연스러운 이야기는 'AI 콘티' 권장 · 템플릿은 편집용 뼈대</div>
       <div id="prev-${id}">${contiPreview(d.cuts)}</div>`;
   } else if(n.type==='cutimg'){
     b.innerHTML=`
@@ -576,6 +579,8 @@ async function runNode(id,act){
     if(act==='card-copyimg')return runCardCopyImg(id);
     if(act==='conti-ai')return await runContiAI(id);
     if(act==='conti-tpl')return runContiTpl(id);
+    if(act==='conti-copyprompt')return runContiCopyPrompt(id);
+    if(act==='conti-paste')return runContiPaste(id);
     if(act==='ctpl-save')return runCtplSave(id);
     if(act==='cutimg')return await runCutImg(id);
     if(act==='export')return runExport(id);
@@ -656,30 +661,37 @@ const CONTI_SCHEMA={type:'object',properties:{cuts:{type:'array',items:{type:'ob
   narration:{type:'string'},pron:{type:'string'},grade:{type:'string'},bgm:{type:'string'},sfx:{type:'string'},
   motion:{type:'string'},durationSec:{type:'number'}
 },required:['action','imagePrompt','camera','dialogue','narration']}}},required:['cuts']};
+function contiPromptText(proj){
+  const asp=proj.aspect||'9:16',n=Math.max(4,Math.min(16,+(proj.cutCount||12))),style=proj.style||'photoreal cinematic commercial',kw=proj.keyword||'부동산';
+  return [
+    '당신은 한국 부동산 영상 감독 겸 카피라이터입니다. 아래 주제로 '+n+'컷짜리 "하나의 자연스러운 이야기"로 이어지는 영상 콘티를 만드세요.',
+    '주제: '+proj.topic,
+    proj.ctx?('반드시 반영할 핵심 사실/수치: '+proj.ctx):'',
+    '[스토리 원칙]',
+    '1) 컷들의 나레이션·자막이 처음부터 끝까지 이어지는 하나의 완성된 스크립트가 되게(앞뒤 자연스럽게 연결, 갑작스런 전환·반복 금지).',
+    '2) 각 컷 imagePrompt의 장면은 그 컷 나레이션 내용과 정확히 일치(무관한 스톡 장면 금지). 주제의 실제 장소·시대·상황을 구체적으로 묘사.',
+    '3) 훅은 주제 성격에 맞게: 성공/기회 사례면 호기심·놀라움으로, 문제/위험이면 경각심으로. "남 얘기 같으세요" 식 억지 공포 금지.',
+    '4) 결말은 "'+kw+' 투자"로 이야기 흐름상 납득되게 자연스럽게 연결, 마지막 컷은 댓글 「'+kw+'」→DM CTA(억지 전환 금지).',
+    '5) 과장·수익보장·실제 종목/브랜드 금지, 일본어 금지, 방송 안전.',
+    '[형식] 화면비 '+asp+'. 스타일(색감/룩만, 장면·드론 지정 금지) '+style+'.',
+    '각 컷: imagePrompt(영어; 장면+샷사이즈+렌즈+조명+색감, 컷마다 확연히 다르게, 한글 텍스트 굽지 말 것, no watermark/no Japanese/no real brand), action(한국어), camera(영어), dialogue(한국어 자막), narration(한국어 VO 구어체), pron(숫자·영어 읽는법), grade, bgm, sfx, motion, durationSec(2~4).',
+    '총 '+n+'컷. JSON만 출력: {"cuts":[{...}]}'
+  ].filter(Boolean).join('\n');
+}
+function extractContiJSON(t){if(!t)return null;const f=t.match(/```(?:json)?\s*([\s\S]*?)```/i);if(f)t=f[1];const s=t.indexOf('{'),e=t.lastIndexOf('}');if(s<0||e<0)return null;let j=t.slice(s,e+1).replace(/,(\s*[}\]])/g,'$1');try{return JSON.parse(j);}catch(x){return null;}}
+function applyContiCuts(id,obj,proj){const node=state.nodes[id];node.data.cuts=(obj.cuts||[]).map(c=>({...c,thumb:c.imagePrompt||c.thumb||'',dur:c.durationSec!=null?String(c.durationSec):(c.dur||'')}));node.data._proj=proj||node.data._proj||incoming(id).proj;renderBody(id);scheduleSave();}
 async function runContiAI(id){
   const ctx=incoming(id);const proj=ctx.proj;
   if(!proj||!proj.topic){toast('프로젝트 노드를 연결하고 주제를 입력하세요');return;}
-  const asp=proj.aspect||'9:16';const n=Math.max(4,Math.min(16,+(proj.cutCount||12)));
-  const style=proj.style||'photoreal cinematic commercial';
-  const prompt=[
-    '당신은 한국 부동산(토지) 광고의 영상 감독 겸 시네마토그래퍼입니다.',
-    `주제 "${proj.topic}"로 ${n}컷짜리 영상 콘티를 만들어줘. 충격적 문제제기로 시작 → 해결책이 "토지(땅) 매입"으로 귀결 → 마지막에 댓글 「토지」→DM 유도.`,
-    proj.ctx?('핵심 컨텍스트/수치: '+proj.ctx):'',
-    `화면비 ${asp}. 스타일 ${style}.`,
-    '각 컷은 실제 제작용으로 매우 상세하게 채워라:',
-    `- imagePrompt: 나노바나나/GPT 이미지에 그대로 붙여넣을 영어 이미지 프롬프트. 반드시 [피사체·상황] + [샷사이즈·카메라 앵글] + [렌즈(24/35/50/85mm 또는 100mm macro)] + [조명·시간대] + [색보정/무드] + [스타일: ${style}] + [디테일]을 모두 포함해 아주 구체적으로. ${asp} frame. 한글 텍스트 굽지 말 것. no watermark, no Japanese text, no real brand/logo.`,
-    '- action: 한국어 동작/역할. camera: 영어 카메라 앵글+무빙. dialogue: 한국어 화면 자막. narration: 한국어 성우 VO(자연스러운 구어체). pron: 숫자/한자어/영어 읽는 법(예 3억→삼억, ROI→아르오아이). grade: 컬러그레이드. bgm: 배경음악 무드(한국어). sfx: 효과음(한국어). motion: 이 이미지를 힉스필드/Seedance로 영상화할 때의 카메라 무빙(영어). durationSec: 컷당 2~4초.',
-    '★ 스타일('+style+')은 색감/룩에만 적용하고, 컷마다 장면·배경·구도·샷사이즈·앵글·VFX를 확연히 다르게(드론/항공 같은 카메라를 모든 컷에 반복 금지). 비슷한 컷 절대 반복 금지. 주제 '+proj.topic+'에 맞는 구체적 배경·소품·상황을 매 컷 다르게.',
-    '★ 리포터/데이터형: 주제가 정책·세금·통계 등이면 "리포터가 카메라에 설명하는 컷"과 "현행 vs 개정을 예시 수치로 비교하는 인포그래픽 인서트"를 반드시 포함(실제 종목/브랜드 금지).',
-    '규칙: 일본어·실제 종목/브랜드 금지, 수익보장·과장 표현 금지, 방송 안전.',
-    `총 ${n}컷. JSON만 출력.`
-  ].filter(Boolean).join('\n');
-  toast('AI 콘티('+n+'컷) 생성 중…');
-  const d=await api('/gemini/text',{prompt,schema:CONTI_SCHEMA,model:state.settings.tmodel});
-  let obj;try{obj=JSON.parse(d.text);}catch(e){throw new Error('콘티 JSON 파싱 실패');}
-  const node=state.nodes[id];node.data.cuts=(obj.cuts||[]).map(c=>({...c,thumb:c.imagePrompt||c.thumb||'',dur:c.durationSec!=null?String(c.durationSec):''}));
-  node.data._proj=proj;renderBody(id);scheduleSave();toast('AI 콘티 '+node.data.cuts.length+'컷 생성 완료');
+  const n=Math.max(4,Math.min(16,+(proj.cutCount||12)));
+  toast('AI 콘티('+n+'컷) 생성 중… (자연스러운 스토리)');
+  const d=await api('/gemini/text',{prompt:contiPromptText(proj),schema:CONTI_SCHEMA,model:state.settings.tmodel});
+  let obj;try{obj=JSON.parse(d.text);}catch(e){obj=extractContiJSON(d.text);}
+  if(!obj||!obj.cuts||!obj.cuts.length)throw new Error('콘티 JSON 파싱 실패');
+  applyContiCuts(id,obj,proj);toast('AI 콘티 '+state.nodes[id].data.cuts.length+'컷 생성 완료');
 }
+function runContiCopyPrompt(id){const ctx=incoming(id);const proj=ctx.proj;if(!proj||!proj.topic){toast('프로젝트 노드 연결 + 주제 입력 후 사용');return;}copyStr(contiPromptText(proj));toast('AI 콘티 프롬프트 복사 · GenSpark/Gemini에 붙여 결과 JSON을 아래에 붙여넣기');}
+function runContiPaste(id){const ta=document.getElementById('cj-'+id);const o=extractContiJSON(ta?ta.value:'');if(!o||!o.cuts||!o.cuts.length){toast('JSON 인식 실패 · AI가 준 {"cuts":[...]} 를 그대로 붙여넣으세요');return;}applyContiCuts(id,o,incoming(id).proj);toast('붙여넣은 콘티 '+state.nodes[id].data.cuts.length+'컷 적용');}
 /* 상세 템플릿: 12~16컷, 컷마다 리치 이미지 프롬프트 + BGM/SFX/나레이션/모션 */
 function buildRichCuts(proj){
   const T=proj.topic||'이 주제',ASP=proj.aspect||'9:16',CX=proj.ctx||'',STYLE=proj.style||'photoreal cinematic commercial';
@@ -721,7 +733,7 @@ function buildRichCuts(proj){
   const probScenes=pick(PROB,Math.min(4,PROB.length));
   const solLines=[['「사라지지 않는 실물 자산」','사라지지 않는 실물 자산입니다.'],['「가치가 쌓이는 곳」','가치가 차곡차곡 쌓입니다.'],['「개발과 함께 오릅니다」','개발과 함께 가치가 오릅니다.'],['「도시가 만들어질 때」','도시가 만들어질 때 부가 따라옵니다.'],['「흔들리지 않는 중심」','변동성에도 흔들리지 않는 중심.'],['「기회는 지금도」','기회는 지금도 남아 있습니다.'],['「실물로 리밸런싱」','주식·현금을 실물로 리밸런싱하세요.'],['「검증된 패턴」','규제완화·인프라·시간, 검증된 패턴.']];
   const cuts=[];
-  cuts.push({action:'충격 훅',character:false,dur:'2',grade:'cold desaturated',bgm:'저음 긴장 드론, 심박',sfx:'충격 스팅어',camera:'push-in',motion:'slow dolly-in',imagePrompt:P(probScenes[0]||PROB[0]),dialogue:'「'+T+', 남 얘기 같으세요?」',narration:T+', 남의 이야기 같으신가요?',pron:''});
+  cuts.push({action:'훅',character:false,dur:'2',grade:'cinematic intro',bgm:'호기심 인트로',sfx:'인트로 스팅어',camera:'push-in',motion:'slow dolly-in',imagePrompt:P(probScenes[0]||PROB[0]),dialogue:'「'+T+', 이거 아세요?」',narration:T+', 지금부터 이야기해 드릴게요.',pron:''});
   cuts.push({action:'문제 심화',character:false,dur:'3',grade:'cold grey',bgm:'점증 불안',sfx:'긴장음',camera:'insert',motion:'slow push',imagePrompt:P(probScenes[1]||PROB[1]),dialogue:CX?('「'+CX+'」'):'「문제는 점점 커집니다」',narration:CX?(CX.replace(/\?+$/,'')+'.'):'내버려 두면 문제는 점점 커집니다.',pron:''});
   if(n>=6)cuts.push({action:'문제 심화2',character:false,dur:'2',grade:'cold',bgm:'긴장',sfx:'저음 럼블',camera:'insert',motion:'slow track',imagePrompt:P(probScenes[2]||rnd(PROB)),dialogue:'「지금도 벌어지고 있죠」',narration:'지금 이 순간에도 벌어지고 있습니다.',pron:''});
   if(n>=8){
